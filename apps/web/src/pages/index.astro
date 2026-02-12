@@ -2,10 +2,10 @@
 import "../styles/global.css";
 import { HwcHeader } from "@hwc/header";
 
-
 const mapTilerKey = import.meta.env.PUBLIC_MAPTILER_API_KEY;
 const mapboxToken = import.meta.env.PUBLIC_MAPBOX_TOKEN;
 const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || "";
+const basePath = import.meta.env.PUBLIC_APP_BASE_PATH || "";
 ---
 
 <html lang="en">
@@ -14,24 +14,15 @@ const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || "";
 		<link rel="icon" type="image/ico+xml" href="/favicon.ico" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<title>
-			HWC Engineering | Parcel Research Tool
-		</title>
+		<title>HWC Engineering | Parcel Research Tool</title>
 	</head>
 	<body>
 		<HwcHeader
 			client:only="react"
+			basePath={basePath}
 			title="Parcel Research Tool"
 			right={null}
 			children={null}
-		/>
-
-		<PhotoMapApp
-			client:only="react"
-			maxZoom={22}
-			apiBaseUrl={apiBaseUrl}
-			mapTilerKey={mapTilerKey}
-			mapboxToken={mapboxToken}
 		/>
 	</body>
 </html>
