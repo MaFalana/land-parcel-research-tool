@@ -2,22 +2,26 @@ import React from "react";
 import "./header.css";
 
 export default function HwcHeader({
-  logoSrc = "/assets/HWC-Logo-Light.png",
+  logoSrc,
+  basePath = "",
   homeHref = "https://www.hwcengineering.com/",
   alt = "HWC Engineering",
   title,
-  right,
+  actions,
   children
 }) {
-  // right: optional convenience slot
-  // children: optional extra content (filters/buttons/etc.)
+  // Default logo path with base path support
+  const defaultLogoSrc = `${basePath}/assets/HWC-Logo-Light.png`;
+  const finalLogoSrc = logoSrc || defaultLogoSrc;
+  // actions: optional slot for header controls (search, filters, buttons, etc.)
+  // children: fallback slot for additional content
 
   return (
     <header className="hwc-header" role="banner" aria-label="HWC header">
       <div className="hwc-header__inner">
         <div className="hwc-header__left">
           <a className="hwc-header__brand" href={homeHref} aria-label="Home">
-            <img className="hwc-header__logo" src={logoSrc} alt={alt} />
+            <img className="hwc-header__logo" src={finalLogoSrc} alt={alt} />
           </a>
 
           {title ? (
@@ -28,8 +32,8 @@ export default function HwcHeader({
           ) : null}
         </div>
 
-        <div className="hwc-header__right">
-          {right}
+        <div className="hwc-header__actions">
+          {actions}
           {children}
         </div>
       </div>

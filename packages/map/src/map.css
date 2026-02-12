@@ -77,6 +77,19 @@
   opacity: 1;
 }
 
+.layer-btn-text {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--hdr-fg);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+}
+
 
 /* Zoom Controls - positioned bottom-right, horizontal layout */
 .zoom-controls {
@@ -163,6 +176,24 @@
   padding: 0;
 }
 
+/* Selected marker state */
+.hwc-map-marker.is-selected {
+  background-color: #0ea5e9;
+  /* Sky blue for selection */
+  border-color: white;
+  border-width: 3px;
+  transform: scale(1.2);
+  box-shadow: 0 0 12px rgba(14, 165, 233, 0.6);
+  z-index: 1000;
+}
+
+/* Highlighted marker state (hover) */
+.hwc-map-marker.is-highlighted {
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(238, 47, 39, 0.7);
+  z-index: 999;
+}
+
 
 
 /* 
@@ -191,6 +222,32 @@
   background-color: #c41e3a;
   transform: scale(1.1);
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Cluster with some photos selected (partial) */
+.hwc-marker-cluster.cluster-partial-selected {
+  background-color: #f59e0b;
+  /* Orange for partial selection */
+  border-color: white;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+
+.hwc-marker-cluster.cluster-partial-selected:hover {
+  background-color: #d97706;
+  transform: scale(1.1);
+}
+
+/* Cluster with all photos selected (full) */
+.hwc-marker-cluster.cluster-all-selected {
+  background-color: #0ea5e9;
+  /* Blue for full selection */
+  border-color: white;
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.6);
+}
+
+.hwc-marker-cluster.cluster-all-selected:hover {
+  background-color: #0284c7;
+  transform: scale(1.1);
 }
 
 .hwc-marker-cluster div {

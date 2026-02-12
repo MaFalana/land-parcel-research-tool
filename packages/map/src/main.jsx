@@ -17,9 +17,11 @@ import { MapAttribution } from "./attribution.jsx";
 
 function FitBounds({ items, getLatLng, enabled = true }) {
   const map = useMap();
+  const hasRun = React.useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
+    if (hasRun.current) return; // Only run once
     if (!items?.length) return;
 
     const latLngs = items
@@ -28,6 +30,7 @@ function FitBounds({ items, getLatLng, enabled = true }) {
 
     if (latLngs.length > 0) {
       map.fitBounds(latLngs, { padding: [50, 50] });
+      hasRun.current = true;
     }
   }, [map, items, getLatLng, enabled]);
 
@@ -119,13 +122,14 @@ export function HwcMap({
   initialCenter = [0, 0],
   initialZoom = 2,
   minZoom = 2,
-  maxZoom,
+  maxZoom = 22,
   fitBoundsOnLoad = true,
 
   // Layers
   baseLayer,
   onBaseLayerChange,
   mapTilerKey,
+  mapboxToken,
 
   // Ortho overlay
   orthoBounds,
@@ -133,6 +137,9 @@ export function HwcMap({
   // Controls
   showControls = true,
   showAttribution = true,
+
+  // Base path for assets
+  basePath = "",
 
   // Marker/cluster options
   cluster = true,
@@ -154,7 +161,15 @@ export function HwcMap({
   const validItems = useMemo(() => {
     return (items || []).filter((it) => {
       const p = getLatLng(it);
-      return p && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+      // Filter out invalid coordinates: null, undefined, non-finite, or (0, 0)
+      if (!p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) {
+        return false;
+      }
+      // Exclude (0, 0) as it's typically a placeholder/invalid coordinate
+      if (p[0] === 0 && p[1] === 0) {
+        return false;
+      }
+      return true;
     });
   }, [items, getLatLng]);
 
@@ -188,9 +203,28 @@ export function HwcMap({
     const count = clusterObj.getChildCount();
     const size = count < 10 ? 33 : count < 100 ? 40 : 47;
 
+    // Check if any markers in cluster are selected
+    const markers = clusterObj.getAllChildMarkers();
+    const selectedCount = markers.filter(marker => {
+      const item = marker.options.item; // We'll need to pass this
+      if (!item) return false;
+      const id = getId(item);
+      return hasSelected(id);
+    }).length;
+
+    // Determine cluster class based on selection state
+    let clusterClass = "hwc-marker-cluster";
+    if (selectedCount > 0) {
+      if (selectedCount === count) {
+        clusterClass += " cluster-all-selected"; // All photos selected
+      } else {
+        clusterClass += " cluster-partial-selected"; // Some photos selected
+      }
+    }
+
     return divIcon({
       html: `<div>${count}</div>`,
-      className: "hwc-marker-cluster",
+      className: clusterClass,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2]
     });
@@ -216,10 +250,12 @@ export function HwcMap({
   };
 
   const layerOptions = useMemo(() => {
-    const opts = [{ key: "streets", label: "Streets" }];
-    if (mapTilerKey) opts.push({ key: "satellite", label: "Satellite" });
-    return opts;
-  }, [mapTilerKey]);
+    // Multiple tile provider options with consistent max zoom
+    return [
+      { key: "streets", label: "Streets" },
+      { key: "satellite", label: "Hybrid (MapTiler)" }
+    ];
+  }, []);
 
   return (
     <div className="map-wrapper">
@@ -228,6 +264,7 @@ export function HwcMap({
           baseLayer={effectiveBaseLayer}
           setBaseLayer={(k) => onBaseLayerChange?.(k)}
           options={layerOptions}
+          basePath={basePath}
         />
       )}
 
@@ -252,15 +289,47 @@ export function HwcMap({
             key="streets"
             url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
+            maxZoom={maxZoom}
           />
         )}
 
-        {effectiveBaseLayer === "satellite" && (
+        {effectiveBaseLayer === "satellite" && mapTilerKey && (
           <TileLayer
-            key="satellite-esri"
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-            attribution="&copy; Esri, Maxar, Earthstar Geographics"
-            maxZoom={19}
+            key="satellite-hybrid"
+            url={`https://api.maptiler.com/maps/hybrid/256/{z}/{x}/{y}.jpg?key=${mapTilerKey}`}
+            attribution="&copy; MapTiler &copy; OpenStreetMap contributors"
+            maxZoom={maxZoom}
+          />
+        )}
+
+        {effectiveBaseLayer === "satellite" && !mapTilerKey && (
+          <TileLayer
+            key="satellite-google-fallback"
+            url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+            attribution="&copy; Google"
+            maxZoom={maxZoom}
+            subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
+          />
+        )}
+
+        {effectiveBaseLayer === "satellite-mapbox" && mapboxToken && (
+          <TileLayer
+            key="satellite-mapbox"
+            url={`https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg?access_token=${mapboxToken}`}
+            attribution="&copy; Mapbox &copy; Maxar"
+            maxZoom={maxZoom}
+            tileSize={512}
+            zoomOffset={-1}
+          />
+        )}
+
+        {effectiveBaseLayer === "satellite-google" && (
+          <TileLayer
+            key="satellite-google"
+            url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+            attribution="&copy; Google"
+            maxZoom={maxZoom}
+            subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
           />
         )}
 
@@ -284,6 +353,7 @@ export function HwcMap({
                   key={String(id)}
                   position={[lat, lon]}
                   icon={createMarkerIcon(it)}
+                  item={it}
                   eventHandlers={{
                     click: () => handleMarkerClick(it),
                     mouseover: () => handleMarkerMouseOver(it),

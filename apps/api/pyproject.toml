@@ -1,11 +1,21 @@
 [project]
-name = "hwc-api"
+name = "hwc-land-parcel-automater-api"
 version = "0.0.1"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.110",
   "uvicorn[standard]>=0.27",
-  "pydantic-settings>=2.0"
+  "pydantic-settings>=2.0",
+  "geopandas",
+  "fiona>=1.9.6",
+  "pandas",
+   "shapely",
+  "pyproj",
+   "ezdxf",
+   "openpyxl",
+   "requests",
+  "beautifulsoup4",
+  "playwright"
 ]
 
 [tool.uvicorn]

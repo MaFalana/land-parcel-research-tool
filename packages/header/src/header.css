@@ -55,10 +55,11 @@
   max-width: min(60vw, 720px);
 }
 
-.hwc-header__right {
+.hwc-header__actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -71,5 +72,8 @@
   }
   .hwc-header__title {
     max-width: 55vw;
+  }
+  .hwc-header__actions {
+    gap: 0.5rem;
   }
 }

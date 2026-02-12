@@ -209,29 +209,50 @@ Example:
 
 ## Base Layers
 
-Two free base layers are available (no API key required):
+Multiple tile providers are available with consistent max zoom support:
 
 ### Streets (OpenStreetMap)
 - **Provider**: OpenStreetMap
 - **Cost**: Free, unlimited
 - **Coverage**: Global
+- **Max Zoom**: Configurable (default 22, tiles available to ~19)
 - **Best for**: Street maps with labels
 
 ### Satellite (ESRI World Imagery)
 - **Provider**: ESRI/Maxar
 - **Cost**: Free, unlimited (no API key needed)
-- **Quality**: High resolution (up to zoom 19)
+- **Quality**: High resolution
 - **Coverage**: Global
-- **Best for**: Satellite imagery
+- **Max Zoom**: Configurable (default 22, tiles available to ~19)
+- **Best for**: Free satellite imagery
+
+### Satellite (Mapbox)
+- **Provider**: Mapbox
+- **Cost**: Free tier (200k tile requests/month), requires API key
+- **Quality**: Very high resolution
+- **Coverage**: Global
+- **Max Zoom**: Configurable (default 22, tiles available to 22)
+- **Best for**: High-resolution satellite imagery with better zoom
+- **Setup**: Add `PUBLIC_MAPBOX_TOKEN` to your .env file
+
+### Satellite (Google)
+- **Provider**: Google Maps
+- **Cost**: Free (uses public tile endpoint)
+- **Quality**: High resolution
+- **Coverage**: Global
+- **Max Zoom**: Configurable (default 22, tiles available to ~21)
+- **Best for**: Alternative high-resolution satellite imagery
+- **Note**: No API key required for basic usage
 
 ```jsx
 <HwcMap
   items={items}
-  baseLayer="satellite"  // or "streets"
+  baseLayer="satellite-google"  // or "streets", "satellite", "satellite-mapbox"
+  maxZoom={22}
 />
 ```
 
-The map automatically uses free ESRI satellite imagery - no MapTiler key needed!
+All layers now support the same maxZoom configuration for consistent behavior across providers.
 
 ## Clustering
 Marker clustering is enabled by default.

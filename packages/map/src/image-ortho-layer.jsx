@@ -5,11 +5,12 @@ import L from 'leaflet';
 /**
  * ImageOrthoLayer - Simple image overlay for 2D maps
  * 
- * Displays a JPG/PNG image as an overlay with specified bounds.
+ * Displays an image as an overlay with specified bounds.
+ * Supports JPG, PNG, WebP, and any browser-compatible image format.
  * Much simpler and faster than GeoTIFF approach.
  * 
  * @param {Object} props
- * @param {string} props.url - URL to image file (JPG/PNG)
+ * @param {string} props.url - URL to image file (JPG/PNG/WebP)
  * @param {Array} props.bounds - [[south, west], [north, east]] or null to auto-calculate
  * @param {number} props.opacity - Layer opacity (0-1)
  * @param {string} props.blendMode - CSS mix-blend-mode (e.g., 'multiply', 'screen', 'overlay')

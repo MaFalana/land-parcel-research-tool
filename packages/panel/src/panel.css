@@ -144,6 +144,16 @@
   height: 16px;
 }
 
+/* Left panel: chevron points right (rotate 180deg from left-pointing) */
+.hwc-panel-toggle.left svg {
+  transform: rotate(180deg);
+}
+
+/* Right panel: chevron points left (no rotation needed) */
+.hwc-panel-toggle.right svg {
+  transform: none;
+}
+
 /* Panel Section */
 .panel-section {
   border-bottom: 1px solid var(--hdr-border, rgba(255, 255, 255, 0.1));
@@ -380,7 +390,13 @@
   }
 
   .hwc-panel-toggle svg {
-    transform: rotate(90deg);
+    transform: rotate(90deg) !important;
+    /* Point up on mobile, override desktop direction */
+  }
+
+  /* Hide toggle on mobile when specified (for multi-panel layouts) */
+  .hwc-panel-toggle.hide-on-mobile {
+    display: none;
   }
 
   .hwc-panel-header h3 {

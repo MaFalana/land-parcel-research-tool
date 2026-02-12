@@ -4,19 +4,21 @@ import { HwcPanel, PanelSection } from '@hwc/panel';
 import { FiUpload, FiFilter, FiImage } from 'react-icons/fi';
 import { UploadSection } from './upload-section.jsx';
 import { PhotoGrid } from './photo-grid.jsx';
+import { FilterSection } from './filter-section.jsx';
 
-export function PhotoPanel({ 
-  isOpen, 
-  onToggle, 
+export function PhotoPanel({
+  isOpen,
+  onToggle,
   apiBaseUrl,
   title = "Photo Manager",
-  position = "left", // "left" or "right"
   onPhotosChange,
   selectedPhotoIds = [],
   onSelectionChange,
   highlightedPhotoId,
   onPhotoClick,
-  refreshTrigger = 0
+  refreshTrigger = 0,
+  filters = {},
+  onFiltersChange
 }) {
   const [expandedSections, setExpandedSections] = useState({
     upload: false,
@@ -32,7 +34,6 @@ export function PhotoPanel({
   };
 
   const handleUploadComplete = (count) => {
-    console.log(`${count} photos uploaded successfully`);
     // Notify parent to refresh both photo grid and map
     if (onPhotosChange) {
       onPhotosChange();
@@ -44,7 +45,6 @@ export function PhotoPanel({
       isOpen={isOpen}
       onToggle={onToggle}
       title={title}
-      position={position}
       toggleLabel="Open Photo Manager"
     >
       {/* Upload Section */}
@@ -54,7 +54,7 @@ export function PhotoPanel({
         isExpanded={expandedSections.upload}
         onToggle={() => toggleSection('upload')}
       >
-        <UploadSection 
+        <UploadSection
           apiBaseUrl={apiBaseUrl}
           onUploadComplete={handleUploadComplete}
         />
@@ -67,9 +67,11 @@ export function PhotoPanel({
         isExpanded={expandedSections.filters}
         onToggle={() => toggleSection('filters')}
       >
-        <div className="filter-placeholder">
-          <p className="empty-message">Filters coming soon...</p>
-        </div>
+        <FilterSection
+          apiBaseUrl={apiBaseUrl}
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+        />
       </PanelSection>
 
       {/* Photos Section (includes batch actions) */}
@@ -87,6 +89,7 @@ export function PhotoPanel({
           onPhotoClick={onPhotoClick}
           refreshTrigger={refreshTrigger}
           onPhotosChange={onPhotosChange}
+          filters={filters}
         />
       </PanelSection>
     </HwcPanel>

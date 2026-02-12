@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { FiX, FiEdit3, FiTrash2, FiDownload, FiMapPin, FiCalendar, FiTag, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
-export function PhotoLightbox({ 
-  photo, 
-  isOpen, 
-  onClose, 
-  onDelete, 
+export function PhotoLightbox({
+  photo,
+  isOpen,
+  onClose,
+  onDelete,
   onEdit,
   apiBaseUrl,
   // Navigation props
@@ -25,7 +25,7 @@ export function PhotoLightbox({
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -44,7 +44,7 @@ export function PhotoLightbox({
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!isOpen) return;
-      
+
       switch (e.key) {
         case 'Escape':
           onClose();
@@ -115,7 +115,6 @@ export function PhotoLightbox({
       }
 
       const result = await response.json();
-      console.log('Update result:', result);
 
       // Update local photo object
       const updatedPhoto = {
@@ -123,10 +122,10 @@ export function PhotoLightbox({
         description: editDescription,
         tags: editTags.split(',').map(tag => tag.trim()).filter(tag => tag)
       };
-      
+
       setIsEditing(false);
       onEdit?.(updatedPhoto);
-      
+
     } catch (error) {
       console.error('Error updating photo:', error);
       alert(`Failed to update photo: ${error.message}`);
@@ -151,11 +150,10 @@ export function PhotoLightbox({
       }
 
       const result = await response.json();
-      console.log('Delete result:', result);
 
       onDelete?.(photo);
       onClose();
-      
+
     } catch (error) {
       console.error('Error deleting photo:', error);
       alert(`Failed to delete photo: ${error.message}`);
@@ -164,8 +162,28 @@ export function PhotoLightbox({
     }
   };
 
-  const handleDownload = () => {
-    if (photo.url) {
+  const handleDownload = async () => {
+    if (!photo.url) return;
+
+    try {
+      const response = await fetch(photo.url);
+      const blob = await response.blob();
+
+      // Use the photo filename
+      const filename = photo.filename || 'photo.jpg';
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback to opening in new tab
       window.open(photo.url, '_blank');
     }
   };
@@ -198,7 +216,7 @@ export function PhotoLightbox({
             )}
           </div>
           <div className="photo-lightbox-actions">
-            <button 
+            <button
               className="lightbox-btn"
               onClick={handleEdit}
               disabled={isLoading}
@@ -206,14 +224,14 @@ export function PhotoLightbox({
             >
               <FiEdit3 />
             </button>
-            <button 
+            <button
               className="lightbox-btn"
               onClick={handleDownload}
               title="Download original"
             >
               <FiDownload />
             </button>
-            <button 
+            <button
               className="lightbox-btn delete-btn"
               onClick={handleDelete}
               disabled={isLoading}
@@ -221,7 +239,7 @@ export function PhotoLightbox({
             >
               <FiTrash2 />
             </button>
-            <button 
+            <button
               className="lightbox-btn close-btn"
               onClick={onClose}
               title="Close"
@@ -238,19 +256,19 @@ export function PhotoLightbox({
               <div className="loading-spinner" />
             </div>
           )}
-          <img 
-            src={photo.url || photo.thumbnail} 
+          <img
+            src={photo.url || photo.thumbnail}
             alt={photo.filename}
             loading="lazy"
             onLoad={() => setImageLoading(false)}
             onError={() => setImageLoading(false)}
             style={{ opacity: imageLoading ? 0.5 : 1 }}
           />
-          
+
           {/* Navigation Arrows - positioned relative to image */}
           {showNavigation && (
             <>
-              <button 
+              <button
                 className={`photo-nav-btn photo-nav-prev ${!canNavigatePrevious ? 'disabled' : ''}`}
                 onClick={navigatePrevious}
                 disabled={!canNavigatePrevious}
@@ -258,7 +276,7 @@ export function PhotoLightbox({
               >
                 <FiChevronLeft />
               </button>
-              <button 
+              <button
                 className={`photo-nav-btn photo-nav-next ${!canNavigateNext ? 'disabled' : ''}`}
                 onClick={navigateNext}
                 disabled={!canNavigateNext}
@@ -355,14 +373,14 @@ export function PhotoLightbox({
         {/* Save/Cancel buttons when editing */}
         {isEditing && (
           <div className="photo-lightbox-edit-actions">
-            <button 
+            <button
               className="panel-button save-btn"
               onClick={handleEdit}
               disabled={isLoading}
             >
               {isLoading ? 'Saving...' : 'Save Changes'}
             </button>
-            <button 
+            <button
               className="panel-button cancel-btn"
               onClick={() => {
                 setIsEditing(false);
