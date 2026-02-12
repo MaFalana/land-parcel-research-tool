@@ -1,5 +1,24 @@
 # Land Parcel Automater
 
+###
+
+apps\web\src\data\epsg\Indiana.json
+```json
+{
+    "name": "String",
+    "unit": "String",
+    "proj4": "String",
+    "_id": Number
+  },
+```
+
+apps\web\src\data\gis\Indiana.json
+```json
+{
+    "county": "String",
+    "url": "String"
+  },
+  ```
 ### Useful links
 - [Create a hover effect](https://docs.maptiler.com/sdk-js/examples/hover-styles/)
 - [Restrict map panning to an area](https://docs.maptiler.com/sdk-js/examples/restrict-bounds/)
