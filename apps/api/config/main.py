@@ -1,23 +1,12 @@
-import os
-import tempfile
-import shutil
-from datetime import datetime, timedelta
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-import uvicorn
-
-from azure.storage.blob import (BlobServiceClient, ContentSettings, PublicAccess)
-from pymongo import MongoClient
-from dotenv import load_dotenv
-
+"""
+Configuration module - Database and Azure initialization
+"""
 from storage.az import AzureStorageManager
 from storage.db import DatabaseManager
+from config.settings import NAME
 
-load_dotenv()
-
-print("Environment variables loaded.\n")
-
+# Initialize database manager (singleton)
 DB = DatabaseManager()
 
+print(f"✓ Connected to database: {NAME}")
+print(f"✓ Connected to Azure storage: {NAME}")
