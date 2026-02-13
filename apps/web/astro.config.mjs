@@ -6,5 +6,11 @@ import react from '@astrojs/react';
 export default defineConfig({
   integrations: [react()],
   base: '/tools/land-parcel-automater',
-  trailingSlash: 'ignore'
+  trailingSlash: 'ignore',
+  vite: {
+    assetsInclude: ['**/*.geojson'],
+    json: {
+      stringify: false
+    }
+  }
 });

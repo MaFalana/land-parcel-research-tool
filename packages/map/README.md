@@ -153,6 +153,89 @@ The ImageOrthoLayer component:
 - Can auto-calculate bounds from point cloud using proj4
 - Optional - only loads if ortho data is provided
 
+## GeoJSON Polygon Layers
+
+Display and interact with GeoJSON polygons (e.g., county boundaries, parcels, zones).
+
+### Simple Prop-Based API
+
+```jsx
+<HwcMap
+  items={markers}
+  geoJsonData={countyBoundaries}
+  selectedPolygonId="Allen County"
+  onPolygonClick={(feature, layer) => {
+    console.log('Clicked:', feature.properties.name);
+  }}
+  polygonDefaultStyle={{
+    color: "#3388ff",
+    weight: 2,
+    fillOpacity: 0.2
+  }}
+  polygonHoverStyle={{
+    weight: 3,
+    fillOpacity: 0.4
+  }}
+  polygonSelectedStyle={{
+    color: "#ff6b35",
+    weight: 3,
+    fillOpacity: 0.5
+  }}
+/>
+```
+
+### Composition API (Advanced)
+
+For multiple layers or custom behavior:
+
+```jsx
+import { HwcMap, GeoJsonPolygonLayer } from "@hwc/map";
+
+<HwcMap items={markers}>
+  <GeoJsonPolygonLayer
+    data={countyBoundaries}
+    selectedId={selectedCounty}
+    onPolygonClick={(feature) => setSelectedCounty(feature.properties.name)}
+    getFeatureId={(feature) => feature.properties.county_id}
+    defaultStyle={{ color: "blue", fillOpacity: 0.2 }}
+  />
+  
+  <GeoJsonPolygonLayer
+    data={parcelBoundaries}
+    selectedId={selectedParcel}
+    onPolygonClick={(feature) => setSelectedParcel(feature.properties.parcel_id)}
+    defaultStyle={{ color: "green", fillOpacity: 0.1 }}
+  />
+</HwcMap>
+```
+
+### GeoJsonPolygonLayer Props
+
+- `data` - GeoJSON FeatureCollection
+- `getFeatureId` - Extract ID from feature (default: `feature.properties.name`)
+- `selectedId` - Currently selected feature ID
+- `onPolygonClick(feature, layer)` - Click handler
+- `onPolygonHover(feature, layer)` - Hover handler (null on mouseout)
+- `defaultStyle` - Default polygon style object
+- `hoverStyle` - Style when hovering (merged with default)
+- `selectedStyle` - Style when selected (merged with default)
+- `showTooltip` - Show tooltip on hover (default: true)
+- `getTooltipContent` - Custom tooltip function (default: `feature.properties.name`)
+
+### Style Objects
+
+Styles follow Leaflet's Path options:
+
+```js
+{
+  color: "#3388ff",      // Border color
+  weight: 2,             // Border width
+  opacity: 0.8,          // Border opacity
+  fillColor: "#3388ff",  // Fill color
+  fillOpacity: 0.2       // Fill opacity
+}
+```
+
 ### The items contract
 The map renders items, not “projects”, “photos”, or “jobs”.
 By default, an item is expected to look like:

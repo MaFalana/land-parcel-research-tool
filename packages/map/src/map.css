@@ -292,3 +292,31 @@
 .leaflet-div-icon.hwc-marker-cluster[style*="width: 47px"] div {
   font-size: 13px;
 }
+
+/* 
+============================
+    GeoJSON Polygon Styles
+============================ 
+*/
+
+/* Custom tooltip styling for polygons */
+.hwc-map-polygon-tooltip {
+  background-color: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+.hwc-map-polygon-tooltip::before {
+  border-top-color: rgba(0, 0, 0, 0.8);
+}
+
+/* Polygon cursor */
+.leaflet-interactive {
+  cursor: pointer;
+}

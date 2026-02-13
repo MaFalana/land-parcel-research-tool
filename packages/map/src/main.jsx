@@ -7,6 +7,7 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 import "./map.css";
 import { LayerToggle, ZoomControls } from "./controls.jsx";
 import { MapAttribution } from "./attribution.jsx";
+import { GeoJsonPolygonLayer } from "./geojson-polygon-layer.jsx";
 
 /**
  * Canonical item shape (default):
@@ -144,6 +145,18 @@ export function HwcMap({
   // Marker/cluster options
   cluster = true,
   clusterOptions = { showCoverageOnHover: false },
+
+  // GeoJSON Polygon support (simple prop-based API)
+  geoJsonData,
+  getPolygonId = (feature) => feature?.properties?.name,
+  selectedPolygonId,
+  onPolygonClick,
+  onPolygonHover,
+  polygonDefaultStyle,
+  polygonHoverStyle,
+  polygonSelectedStyle,
+  showPolygonTooltip = true,
+  getPolygonTooltip,
 
   // Children for additional overlays/markers
   children
@@ -336,6 +349,22 @@ export function HwcMap({
         <FitBounds items={validItems} getLatLng={getLatLng} enabled={fitBoundsOnLoad} />
         <MapNavigator targetItem={targetItem} getLatLng={getLatLng} />
         <MapZoomControls items={validItems} getLatLng={getLatLng} orthoBounds={orthoBounds} />
+
+        {/* GeoJSON Polygon Layer (prop-based API) */}
+        {geoJsonData && (
+          <GeoJsonPolygonLayer
+            data={geoJsonData}
+            getFeatureId={getPolygonId}
+            selectedId={selectedPolygonId}
+            onPolygonClick={onPolygonClick}
+            onPolygonHover={onPolygonHover}
+            defaultStyle={polygonDefaultStyle}
+            hoverStyle={polygonHoverStyle}
+            selectedStyle={polygonSelectedStyle}
+            showTooltip={showPolygonTooltip}
+            getTooltipContent={getPolygonTooltip}
+          />
+        )}
 
         {children}
 
