@@ -147,14 +147,32 @@ class LabelExporter:
         # Extract shapefiles from ZIP
         print("Extracting shapefiles...")
         with zipfile.ZipFile(self.shapefile_zip_path, 'r') as zip_ref:
+            # List contents before extraction
+            print(f"ZIP contents: {zip_ref.namelist()}")
             zip_ref.extractall(self.shapefile_dir)
         
-        # Find the .shp file
-        shp_files = [f for f in os.listdir(self.shapefile_dir) if f.endswith('.shp')]
-        if not shp_files:
-            raise FileNotFoundError("No .shp file found in ZIP")
+        # List extracted files
+        print(f"Extracted to: {self.shapefile_dir}")
+        extracted_files = []
+        for root, dirs, files in os.walk(self.shapefile_dir):
+            for file in files:
+                rel_path = os.path.relpath(os.path.join(root, file), self.shapefile_dir)
+                extracted_files.append(rel_path)
+        print(f"Extracted files: {extracted_files}")
         
-        shp_path = os.path.join(self.shapefile_dir, shp_files[0])
+        # Find the .shp file (search recursively in case files are in subdirectory)
+        shp_path = None
+        for root, dirs, files in os.walk(self.shapefile_dir):
+            for file in files:
+                if file.endswith('.shp'):
+                    shp_path = os.path.join(root, file)
+                    break
+            if shp_path:
+                break
+        
+        if not shp_path:
+            raise FileNotFoundError(f"No .shp file found in ZIP. Extracted files: {extracted_files}")
+        
         print(f"Found shapefile: {shp_path}")
         
         # Load shapefile
