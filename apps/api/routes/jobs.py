@@ -5,6 +5,7 @@ import uuid
 import os
 import tempfile
 from config.main import DB
+from config.settings import MAX_UPLOAD_SIZE_BYTES
 from models.ParcelJob import ParcelJob, ParcelJobProgress, ParcelJobResult
 from utils.file_parser import parse_parcel_file, validate_parcel_ids
 from auth.entra_id import get_current_user
@@ -41,15 +42,36 @@ async def create_parcel_job(
     Create a new parcel research job
     
     Accepts:
-    - Parcel file (TXT, CSV, or XLSX)
-    - Shapefile ZIP
+    - Parcel file (TXT, CSV, or XLSX) - max 5GB
+    - Shapefile ZIP - max 5GB
     - County, CRS, and GIS URL
     
     Returns job ID for tracking progress
     """
     job_id = str(uuid.uuid4())
     
-    # Validate parcel file
+    # Validate file sizes
+    parcel_file.file.seek(0, 2)  # Seek to end
+    parcel_size = parcel_file.file.tell()
+    parcel_file.file.seek(0)  # Reset to start
+    
+    shapefile_zip.file.seek(0, 2)
+    shapefile_size = shapefile_zip.file.tell()
+    shapefile_zip.file.seek(0)
+    
+    if parcel_size > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Parcel file too large. Max size: {MAX_UPLOAD_SIZE_BYTES / (1024**3):.1f} GB"
+        )
+    
+    if shapefile_size > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Shapefile too large. Max size: {MAX_UPLOAD_SIZE_BYTES / (1024**3):.1f} GB"
+        )
+    
+    # Validate parcel file type
     parcel_ext = parcel_file.filename.split('.')[-1].lower()
     if f'.{parcel_ext}' not in ['.txt', '.csv', '.xlsx']:
         raise HTTPException(
@@ -153,6 +175,20 @@ async def get_job_status(job_id: str, user: Optional[dict] = Depends(get_current
     if job.parcel_count > 0:
         progress_pct = (job.parcels_completed / job.parcel_count) * 100
     
+    # Calculate time estimates for processing jobs
+    elapsed_seconds = None
+    estimated_remaining_seconds = None
+    
+    if job.status == "processing" and job.started_at:
+        elapsed = datetime.utcnow() - job.started_at
+        elapsed_seconds = int(elapsed.total_seconds())
+        
+        # Estimate remaining time based on progress
+        if job.parcels_completed > 0:
+            avg_time_per_parcel = elapsed_seconds / job.parcels_completed
+            parcels_remaining = job.parcel_count - job.parcels_completed
+            estimated_remaining_seconds = int(avg_time_per_parcel * parcels_remaining)
+    
     response = {
         "job_id": job.id,
         "status": job.status,
@@ -165,9 +201,14 @@ async def get_job_status(job_id: str, user: Optional[dict] = Depends(get_current
             "failed": job.parcels_failed,
             "percentage": round(progress_pct, 2)
         },
-        "created_at": job.created_at,
-        "updated_at": job.updated_at,
-        "completed_at": job.completed_at
+        "timing": {
+            "created_at": job.created_at,
+            "started_at": job.started_at,
+            "updated_at": job.updated_at,
+            "completed_at": job.completed_at,
+            "elapsed_seconds": elapsed_seconds,
+            "estimated_remaining_seconds": estimated_remaining_seconds
+        }
     }
     
     # Add results if completed
@@ -186,7 +227,7 @@ async def download_job_result(job_id: str, file_type: str, user: Optional[dict] 
     """
     Get download URL for job result files
     
-    file_type: "excel", "dxf", "csv", "pdfs"
+    file_type: "excel", "dxf", "prc" (Property Record Cards)
     Users can only download their own job results
     """
     job_data = DB.parcelJobsCollection.find_one({"_id": job_id})
@@ -214,8 +255,7 @@ async def download_job_result(job_id: str, file_type: str, user: Optional[dict] 
     file_map = {
         "excel": "excel_url",
         "dxf": "dxf_url",
-        "csv": "csv_url",
-        "pdfs": "pdfs_zip_url"
+        "prc": "prc_zip_url"
     }
     
     if file_type not in file_map:
@@ -290,9 +330,19 @@ async def delete_job(job_id: str, user: Optional[dict] = Depends(get_current_use
 
 
 @jobs_router.get("/")
-async def list_jobs(limit: int = 50, offset: int = 0, user: Optional[dict] = Depends(get_current_user)):
+async def list_jobs(
+    limit: int = 50, 
+    offset: int = 0, 
+    status: Optional[str] = None,
+    user: Optional[dict] = Depends(get_current_user)
+):
     """
-    List jobs for the current user with pagination
+    List jobs for the current user with pagination and filtering
+    
+    Query parameters:
+    - limit: Max number of jobs to return (default: 50)
+    - offset: Number of jobs to skip (default: 0)
+    - status: Filter by status (pending, processing, completed, failed, cancelled)
     
     Returns list of jobs sorted by creation date (newest first)
     Users only see their own jobs (filtered by user_id)
@@ -302,6 +352,16 @@ async def list_jobs(limit: int = 50, offset: int = 0, user: Optional[dict] = Dep
     if user and user.get("user_id"):
         # Filter by user_id if authenticated
         query_filter["user_id"] = user["user_id"]
+    
+    # Add status filter if provided
+    if status:
+        valid_statuses = ["pending", "processing", "completed", "failed", "cancelled"]
+        if status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status. Allowed: {', '.join(valid_statuses)}"
+            )
+        query_filter["status"] = status
     
     jobs = list(
         DB.parcelJobsCollection
@@ -317,5 +377,72 @@ async def list_jobs(limit: int = 50, offset: int = 0, user: Optional[dict] = Dep
         "jobs": [ParcelJob(**job).model_dump(by_alias=True) for job in jobs],
         "total": total,
         "limit": limit,
-        "offset": offset
+        "offset": offset,
+        "filters": {
+            "status": status
+        }
+    }
+
+
+@jobs_router.post("/{job_id}/cancel")
+async def cancel_job(job_id: str, user: Optional[dict] = Depends(get_current_user)):
+    """
+    Cancel a running job
+    
+    Only pending or processing jobs can be cancelled
+    Users can only cancel their own jobs
+    """
+    job_data = DB.parcelJobsCollection.find_one({"_id": job_id})
+    
+    if not job_data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Verify user owns this job (if authenticated)
+    if user and user.get("user_id"):
+        if job_data.get("user_id") != user["user_id"]:
+            raise HTTPException(status_code=403, detail="Access denied: You can only cancel your own jobs")
+    
+    job = ParcelJob(**job_data)
+    
+    if job.status not in ["pending", "processing"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel job with status: {job.status}"
+        )
+    
+    # Update job status to cancelled
+    DB.parcelJobsCollection.update_one(
+        {"_id": job_id},
+        {"$set": {
+            "status": "cancelled",
+            "updated_at": datetime.utcnow(),
+            "completed_at": datetime.utcnow()
+        }}
+    )
+    
+    return {
+        "job_id": job_id,
+        "status": "cancelled",
+        "message": "Job cancelled successfully"
+    }
+
+
+@jobs_router.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring
+    
+    Returns API status and database connectivity
+    """
+    try:
+        # Test database connection
+        DB.parcelJobsCollection.find_one({})
+        db_status = "healthy"
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+    
+    return {
+        "status": "healthy",
+        "database": db_status,
+        "version": "2.0.0"
     }

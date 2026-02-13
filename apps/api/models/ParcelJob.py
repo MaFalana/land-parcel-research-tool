@@ -44,6 +44,7 @@ class ParcelJob(BaseModel):
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = Field(None, description="When job processing started")
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = Field(None)
     

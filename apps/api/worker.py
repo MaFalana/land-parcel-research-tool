@@ -77,6 +77,7 @@ class ParcelJobWorker:
                     {"status": "pending"},
                     {"$set": {
                         "status": "processing",
+                        "started_at": datetime.utcnow(),
                         "updated_at": datetime.utcnow()
                     }},
                     sort=[("created_at", 1)],  # FIFO
@@ -109,6 +110,12 @@ class ParcelJobWorker:
         6. Upload results to Azure
         """
         try:
+            # Check if job was cancelled before starting
+            current_job = self.db.parcelJobsCollection.find_one({"_id": job.id})
+            if current_job and current_job.get("status") == "cancelled":
+                print(f"Job {job.id} was cancelled, skipping processing")
+                return
+            
             # Step 1: Update status
             self._update_job_status(job.id, "processing", "Parsing parcel file")
             
@@ -125,6 +132,12 @@ class ParcelJobWorker:
                 job_id=job.id,
                 progress_callback=lambda completed, total: self._update_progress(job.id, completed, total)
             )
+            
+            # Check if cancelled during scraping
+            current_job = self.db.parcelJobsCollection.find_one({"_id": job.id})
+            if current_job and current_job.get("status") == "cancelled":
+                print(f"Job {job.id} was cancelled during scraping")
+                return
             
             # Step 4: Process shapefiles and generate labels
             self._update_job_status(job.id, "processing", "Generating labels and DXF")
