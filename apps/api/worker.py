@@ -193,11 +193,11 @@ class ParcelJobWorker:
     
     def _upload_results(self, job_id: str, output_files: dict, scraped_data: dict) -> dict:
         """
-        Upload result files to Azure and return public URLs
+        Upload result files to Azure in jobs/{job_id}/ folder and return public URLs
         
         Args:
             job_id: Job ID
-            output_files: Dict with paths to DXF, CSV files
+            output_files: Dict with path to DXF file
             scraped_data: Dict with paths to Excel, PDFs
             
         Returns:
@@ -205,43 +205,54 @@ class ParcelJobWorker:
         """
         results = {}
         
+        # All files go in jobs/{job_id}/ folder
+        job_folder = f"jobs/{job_id}"
+        
         # Upload Excel file
         if "excel_path" in scraped_data:
-            blob_name = f"jobs/{job_id}/results/parcels_enriched.xlsx"
+            blob_name = f"{job_folder}/parcels_enriched.xlsx"
             self.db.az.upload_file(scraped_data["excel_path"], blob_name)
             results["excel_url"] = self.db.az.get_public_url(blob_name)
         
         # Upload DXF file
         if "dxf_path" in output_files:
-            blob_name = f"jobs/{job_id}/results/labels.dxf"
+            blob_name = f"{job_folder}/labels.dxf"
             self.db.az.upload_file(output_files["dxf_path"], blob_name)
             results["dxf_url"] = self.db.az.get_public_url(blob_name)
         
-        # Upload CSV file
-        if "csv_path" in output_files:
-            blob_name = f"jobs/{job_id}/results/labels.csv"
-            self.db.az.upload_file(output_files["csv_path"], blob_name)
-            results["csv_url"] = self.db.az.get_public_url(blob_name)
-        
-        # Upload PDFs as ZIP
+        # Upload PDFs as PRC.zip (extracts to PRC folder)
         if "pdfs_dir" in scraped_data:
             import shutil
             import os
             
-            # Create ZIP of PDFs
-            pdfs_zip_path = f"/tmp/{job_id}_pdfs.zip"
+            # Create PRC folder structure for ZIP
+            temp_prc_dir = f"/tmp/{job_id}_PRC"
+            prc_folder = os.path.join(temp_prc_dir, "PRC")
+            os.makedirs(prc_folder, exist_ok=True)
+            
+            # Copy PDFs to PRC folder
+            for pdf_file in os.listdir(scraped_data["pdfs_dir"]):
+                if pdf_file.endswith('.pdf'):
+                    src = os.path.join(scraped_data["pdfs_dir"], pdf_file)
+                    dst = os.path.join(prc_folder, pdf_file)
+                    shutil.copy2(src, dst)
+            
+            # Create ZIP (will contain PRC folder)
+            prc_zip_path = f"/tmp/{job_id}_PRC.zip"
             shutil.make_archive(
-                pdfs_zip_path.replace('.zip', ''),
+                prc_zip_path.replace('.zip', ''),
                 'zip',
-                scraped_data["pdfs_dir"]
+                temp_prc_dir
             )
             
-            blob_name = f"jobs/{job_id}/results/property_cards.zip"
-            self.db.az.upload_file(pdfs_zip_path, blob_name)
-            results["pdfs_zip_url"] = self.db.az.get_public_url(blob_name)
+            blob_name = f"{job_folder}/PRC.zip"
+            self.db.az.upload_file(prc_zip_path, blob_name)
+            results["prc_zip_url"] = self.db.az.get_public_url(blob_name)
             
-            # Clean up temp ZIP
-            if os.path.exists(pdfs_zip_path):
-                os.remove(pdfs_zip_path)
+            # Clean up temp files
+            if os.path.exists(prc_zip_path):
+                os.remove(prc_zip_path)
+            if os.path.exists(temp_prc_dir):
+                shutil.rmtree(temp_prc_dir)
         
         return results

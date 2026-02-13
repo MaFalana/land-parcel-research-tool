@@ -136,12 +136,11 @@ class LabelExporter:
     
     def export(self) -> Dict[str, str]:
         """
-        Generate DXF and CSV label files
+        Generate DXF label file
         
         Returns:
-            Dict with paths to generated files:
+            Dict with path to generated file:
                 - dxf_path: Path to DXF file
-                - csv_path: Path to CSV file
         """
         print(f"LabelExporter: Starting export for job {self.job_id}")
         
@@ -259,11 +258,6 @@ class LabelExporter:
             print(f"\n--- Label {i+1} ---")
             print(labels.iloc[i]["LABEL"])
         
-        # Export CSV
-        csv_path = os.path.join(self.output_dir, "labels.csv")
-        labels[["PARCELID_JOIN", "X", "Y", "LABEL"]].to_csv(csv_path, index=False)
-        print(f"\nWrote CSV: {csv_path}")
-        
         # Export DXF
         dxf_path = os.path.join(self.output_dir, "labels.dxf")
         print("Creating DXF...")
@@ -309,10 +303,8 @@ class LabelExporter:
         
         print(f"\nLabelExporter: Complete!")
         print(f"  Processed: {len(labels)} parcels")
-        print(f"  CSV: {csv_path}")
         print(f"  DXF: {dxf_path}")
         
         return {
-            "dxf_path": dxf_path,
-            "csv_path": csv_path
+            "dxf_path": dxf_path
         }

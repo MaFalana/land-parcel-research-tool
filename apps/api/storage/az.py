@@ -186,16 +186,17 @@ class AzureStorageManager:
             deleted_count += 1
         print(f"Deleted {deleted_count} blobs for project {project_id}")
 
-    def delete_job_file(self, job_id: str):
+    def delete_job_files(self, job_id: str):
         """
-        Delete temporary job file at jobs/{job_id}.laz.
+        Delete all files for a job at jobs/{job_id}/.
         
         Args:
-            job_id: The job ID whose file should be deleted
+            job_id: The job ID whose files should be deleted
         """
-        blob_name = f"jobs/{job_id}.laz"
-        try:
-            self.container_client.delete_blob(blob_name)
-            print(f"Deleted job file {blob_name}")
-        except Exception as e:
-            print(f"Failed to delete job file {blob_name}: {e}")
+        prefix = f"jobs/{job_id}/"
+        blob_list = self.container_client.list_blobs(name_starts_with=prefix)
+        deleted_count = 0
+        for blob in blob_list:
+            self.container_client.delete_blob(blob.name)
+            deleted_count += 1
+        print(f"Deleted {deleted_count} blobs for job {job_id}")

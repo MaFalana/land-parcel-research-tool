@@ -98,15 +98,7 @@ class JobCleanupScheduler:
                 
                 # Delete Azure files
                 try:
-                    prefix = f"jobs/{job_id}/"
-                    blob_list = self.db.az.container_client.list_blobs(name_starts_with=prefix)
-                    blob_count = 0
-                    for blob in blob_list:
-                        self.db.az.container_client.delete_blob(blob.name)
-                        blob_count += 1
-                    
-                    if blob_count > 0:
-                        print(f"  Deleted {blob_count} Azure blobs")
+                    self.db.az.delete_job_files(job_id)
                 except Exception as e:
                     print(f"  Error deleting Azure files: {e}")
                 
