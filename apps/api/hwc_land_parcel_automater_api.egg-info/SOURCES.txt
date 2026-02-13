@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+hwc_land_parcel_automater_api.egg-info/PKG-INFO
+hwc_land_parcel_automater_api.egg-info/SOURCES.txt
+hwc_land_parcel_automater_api.egg-info/dependency_links.txt
+hwc_land_parcel_automater_api.egg-info/requires.txt
+hwc_land_parcel_automater_api.egg-info/top_level.txt

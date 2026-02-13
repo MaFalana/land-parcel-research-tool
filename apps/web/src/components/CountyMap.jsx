@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { CountySelect } from "./CountySelect";
 import { JobSubmissionPanel } from "./JobSubmissionPanel";
+import { JobsWidget } from "./JobsWidget";
+import { JobDetailModal } from "./JobDetailModal";
 import "./county-map.css";
 
 /**
@@ -13,6 +15,8 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
   const [selectedCounty, setSelectedCounty] = useState("");
   const [selectedCountyData, setSelectedCountyData] = useState(null);
   const [isPanelVisible, setIsPanelVisible] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState(null);
+  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [countyBoundaries, setCountyBoundaries] = useState(null);
   const [indianaCounties, setIndianaCounties] = useState(null);
@@ -105,6 +109,11 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
   // Convert county name to full name for polygon selection
   const selectedPolygonId = selectedCounty ? `${selectedCounty} County` : null;
 
+  const handleJobClick = (jobId) => {
+    setSelectedJobId(jobId);
+    setIsJobModalOpen(true);
+  };
+
   return (
     <div className="county-map-container">
       {/* County Selector Panel */}
@@ -171,6 +180,7 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
           fitBoundsOnLoad={false}
           baseLayer="streets"
           showControls={false}
+          showZoomControl={false}
           basePath={basePath}
           
           // GeoJSON polygon configuration
@@ -210,6 +220,16 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
         onClose={() => setIsPanelVisible(false)}
         selectedCounty={selectedCounty}
         gisUrl={selectedCountyData?.url || ''}
+      />
+
+      {/* Jobs Widget */}
+      <JobsWidget onJobClick={handleJobClick} />
+
+      {/* Job Detail Modal */}
+      <JobDetailModal
+        isOpen={isJobModalOpen}
+        onClose={() => setIsJobModalOpen(false)}
+        jobId={selectedJobId}
       />
     </div>
   );

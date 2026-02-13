@@ -1,0 +1,336 @@
+/* Job Detail Modal */
+.job-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.job-modal-content {
+  background: white;
+  border-radius: 16px;
+  max-width: 700px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.job-modal-header {
+  padding: 24px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.job-modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.job-modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.job-modal-close:hover {
+  color: #EE2F27;
+}
+
+.job-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.job-modal-loading,
+.job-modal-error {
+  padding: 40px 20px;
+  text-align: center;
+  color: #64748b;
+}
+
+.job-modal-error {
+  color: #dc2626;
+}
+
+/* Job Detail Sections */
+.job-detail-section {
+  margin-bottom: 24px;
+}
+
+.job-detail-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.job-detail-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.job-detail-status-header h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.job-detail-status {
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* Info Grid */
+.job-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  background: rgba(238, 47, 39, 0.05);
+  border: 1px solid rgba(238, 47, 39, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.job-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.job-detail-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.job-detail-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  word-break: break-all;
+}
+
+.job-detail-mono {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.job-detail-error-box {
+  padding: 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-top: 16px;
+}
+
+.job-detail-error-box strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Downloads */
+.job-detail-downloads {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.job-detail-download-btn {
+  flex: 1;
+  min-width: 150px;
+  padding: 12px 20px;
+  background: var(--hwc-red, #EE2F27);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.job-detail-download-btn:hover {
+  background: #d42820;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(238, 47, 39, 0.3);
+}
+
+.job-detail-download-btn:active {
+  transform: scale(0.98);
+}
+
+/* Modal Footer */
+.job-modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.job-modal-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.job-modal-btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.job-modal-btn-secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.job-modal-btn-warning {
+  background: #fbbf24;
+  color: #78350f;
+}
+
+.job-modal-btn-warning:hover:not(:disabled) {
+  background: #f59e0b;
+}
+
+.job-modal-btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.job-modal-btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.job-modal-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .job-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .job-detail-downloads {
+    flex-direction: column;
+  }
+
+  .job-detail-download-btn {
+    min-width: 100%;
+  }
+
+  .job-modal-footer {
+    flex-wrap: wrap;
+  }
+
+  .job-modal-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .job-modal-content {
+    background: #1f2937;
+  }
+
+  .job-modal-header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .job-modal-header h2,
+  .job-detail-section h3,
+  .job-detail-value {
+    color: #f9fafb;
+  }
+
+  .job-detail-grid {
+    background: rgba(238, 47, 39, 0.15);
+    border-color: rgba(238, 47, 39, 0.3);
+  }
+
+  .job-detail-label {
+    color: #d1d5db;
+  }
+
+  .job-modal-footer {
+    border-top-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .job-modal-btn-secondary {
+    background: #374151;
+    color: #f9fafb;
+  }
+
+  .job-modal-btn-secondary:hover:not(:disabled) {
+    background: #4b5563;
+  }
+}

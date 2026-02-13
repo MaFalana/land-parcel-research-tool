@@ -216,3 +216,12 @@
 .county-map-info > button {
   margin-top: 0.25rem;
 }
+
+/* Hide zoom controls */
+.county-map-wrapper :global(.leaflet-control-zoom) {
+  display: none !important;
+}
+
+.county-map-wrapper :global(.map-zoom-controls) {
+  display: none !important;
+}
