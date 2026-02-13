@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { CountySelect } from "./CountySelect";
+import { JobSubmissionPanel } from "./JobSubmissionPanel";
 import "./county-map.css";
 
 /**
@@ -10,6 +11,8 @@ import "./county-map.css";
  */
 export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
   const [selectedCounty, setSelectedCounty] = useState("");
+  const [selectedCountyData, setSelectedCountyData] = useState(null);
+  const [isPanelVisible, setIsPanelVisible] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [countyBoundaries, setCountyBoundaries] = useState(null);
   const [indianaCounties, setIndianaCounties] = useState(null);
@@ -59,8 +62,13 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
   // Handle county selection from dropdown
   const handleDropdownChange = (countyName, countyData) => {
     setSelectedCounty(countyName);
+    setSelectedCountyData(countyData);
     if (onCountySelect) {
       onCountySelect(countyName, countyData);
+    }
+    // Open panel when county is selected
+    if (countyName && countyData) {
+      setIsPanelVisible(true);
     }
   };
 
@@ -73,6 +81,8 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
     // Toggle selection - if clicking the same county, deselect it
     if (countyName === selectedCounty) {
       setSelectedCounty("");
+      setSelectedCountyData(null);
+      setIsPanelVisible(false);
       if (onCountySelect) {
         onCountySelect("", null);
       }
@@ -81,8 +91,13 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
       const countyData = indianaCounties.find(c => c.county === countyName);
       
       setSelectedCounty(countyName);
+      setSelectedCountyData(countyData);
       if (onCountySelect) {
         onCountySelect(countyName, countyData);
+      }
+      // Open panel when county is selected
+      if (countyData) {
+        setIsPanelVisible(true);
       }
     }
   };
@@ -125,12 +140,20 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
                 className="county-map-clear-btn"
                 onClick={() => {
                   setSelectedCounty("");
+                  setSelectedCountyData(null);
+                  setIsPanelVisible(false);
                   if (onCountySelect) {
                     onCountySelect("", null);
                   }
                 }}
               >
                 Clear Selection
+              </button>
+              <button 
+                className="county-map-submit-btn"
+                onClick={() => setIsPanelVisible(true)}
+              >
+                Submit Job
               </button>
             </div>
           )}
@@ -180,6 +203,14 @@ export function CountyMap({ mapTilerKey, basePath, onCountySelect = null }) {
           }}
         />
       </div>
+
+      {/* Job Submission Panel */}
+      <JobSubmissionPanel
+        isVisible={isPanelVisible}
+        onClose={() => setIsPanelVisible(false)}
+        selectedCounty={selectedCounty}
+        gisUrl={selectedCountyData?.url || ''}
+      />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import "./combobox.css";
  * @param {string} name - Form field name
  * @param {boolean} clearable - Show clear button when value is selected
  * @param {React.Component} ClearIcon - Custom clear icon component
+ * @param {string} searchBy - Field to search by (defaults to 'label')
  */
 export function Combobox({
   value = "",
@@ -29,7 +30,8 @@ export function Combobox({
   error,
   name,
   clearable = true,
-  ClearIcon
+  ClearIcon,
+  searchBy = "label"
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -43,9 +45,10 @@ export function Combobox({
   const displayValue = selectedOption ? selectedOption.label : "";
 
   // Filter options based on search
-  const filteredOptions = options.filter(option =>
-    option.label.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOptions = options.filter(option => {
+    const searchField = option[searchBy] || option.label;
+    return searchField.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   // Close dropdown when clicking outside
   useEffect(() => {

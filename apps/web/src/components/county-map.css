@@ -183,3 +183,36 @@
     border-color: var(--hwc-red, #EE2F27);
   }
 }
+
+.county-map-submit-btn {
+  padding: 0.625rem 1rem;
+  background: var(--hwc-red, #EE2F27);
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 4px rgba(238, 47, 39, 0.2);
+}
+
+.county-map-submit-btn:hover {
+  background: #d42820;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(238, 47, 39, 0.3);
+}
+
+.county-map-submit-btn:active {
+  transform: scale(0.98);
+}
+
+.county-map-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.county-map-info > button {
+  margin-top: 0.25rem;
+}

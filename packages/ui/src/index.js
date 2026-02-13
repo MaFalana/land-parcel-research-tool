@@ -6,3 +6,4 @@ export { ViewToggle } from './ViewToggle/ViewToggle.jsx';
 // Form Components
 export { Select } from './Select/Select.jsx';
 export { Combobox } from './Combobox/Combobox.jsx';
+export { FileDropZone } from './FileDropZone/FileDropZone.jsx';
