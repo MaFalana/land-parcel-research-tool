@@ -1,5 +1,7 @@
 # Land Parcel Automater
 
+Internal tool for automating land parcel data processing.
+
 ### Github Secrets
 
 Repository Secrets
