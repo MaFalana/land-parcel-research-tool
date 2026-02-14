@@ -58,30 +58,73 @@ jobs:
 
       - name: Debug deployment token
         run: |
-          echo "Checking token format..."
-          if [ -z "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
-            echo "ERROR: AZURE_STATIC_WEB_APPS_API_TOKEN secret is empty or not set"
+          echo "Checking which token secret is available..."
+          
+          # Check AZURE_STATIC_WEB_APPS_API_TOKEN
+          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
+            echo "✓ AZURE_STATIC_WEB_APPS_API_TOKEN is set"
+            TOKEN="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}"
+            TOKEN_NAME="AZURE_STATIC_WEB_APPS_API_TOKEN"
+          elif [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F }}" ]; then
+            echo "✓ AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F is set"
+            TOKEN="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F }}"
+            TOKEN_NAME="AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F"
+          else
+            echo "ERROR: No deployment token secret found!"
+            echo "Please set either AZURE_STATIC_WEB_APPS_API_TOKEN or AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F"
             exit 1
           fi
           
-          TOKEN_LENGTH=${#AZURE_STATIC_WEB_APPS_API_TOKEN}
+          echo "Using token: $TOKEN_NAME"
+          TOKEN_LENGTH=${#TOKEN}
           echo "Token length: $TOKEN_LENGTH"
           
-          # Check if token starts with expected format (should start with alphanumeric)
-          if [[ "$AZURE_STATIC_WEB_APPS_API_TOKEN" =~ ^[a-zA-Z0-9] ]]; then
+          # Check if token starts with expected format
+          if [[ "$TOKEN" =~ ^[a-zA-Z0-9] ]]; then
             echo "Token format looks correct"
           else
             echo "WARNING: Token format might be incorrect"
           fi
-        env:
-          AZURE_STATIC_WEB_APPS_API_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
 
       - name: Verify Static Web App details
         run: |
           echo "Static Web App details:"
           az staticwebapp show --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "{name:name,defaultHostname:defaultHostname,repositoryUrl:repositoryUrl}" -o table
           
-          echo "Checking if this matches your token source..."
+          echo ""
+          echo "Getting deployment token from Azure to verify..."
+          AZURE_TOKEN=$(az staticwebapp secrets list --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.apiKey" -o tsv)
+          AZURE_TOKEN_LENGTH=${#AZURE_TOKEN}
+          echo "Azure token length: $AZURE_TOKEN_LENGTH"
+          
+          # Compare with GitHub secret (without revealing the actual values)
+          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
+            GITHUB_TOKEN="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}"
+            GITHUB_TOKEN_LENGTH=${#GITHUB_TOKEN}
+            echo "GitHub secret (AZURE_STATIC_WEB_APPS_API_TOKEN) length: $GITHUB_TOKEN_LENGTH"
+            
+            if [ "$AZURE_TOKEN" = "$GITHUB_TOKEN" ]; then
+              echo "✓ Tokens match!"
+            else
+              echo "✗ Tokens DO NOT match - please update your GitHub secret"
+              echo "First 10 chars of Azure token: ${AZURE_TOKEN:0:10}..."
+              echo "First 10 chars of GitHub token: ${GITHUB_TOKEN:0:10}..."
+            fi
+          fi
+          
+          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F }}" ]; then
+            GITHUB_TOKEN_ALT="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F }}"
+            GITHUB_TOKEN_ALT_LENGTH=${#GITHUB_TOKEN_ALT}
+            echo "GitHub secret (AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F) length: $GITHUB_TOKEN_ALT_LENGTH"
+            
+            if [ "$AZURE_TOKEN" = "$GITHUB_TOKEN_ALT" ]; then
+              echo "✓ Tokens match!"
+            else
+              echo "✗ Tokens DO NOT match - please update your GitHub secret"
+              echo "First 10 chars of Azure token: ${AZURE_TOKEN:0:10}..."
+              echo "First 10 chars of GitHub token: ${GITHUB_TOKEN_ALT:0:10}..."
+            fi
+          fi
 
       - name: Configure Static Web App Authentication
         run: |
