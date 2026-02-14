@@ -1,4 +1,12 @@
 {
+  "platform": {
+    "apiRuntime": "node:18"
+  },
+  "mimeTypes": {
+    ".css": "text/css",
+    ".js": "application/javascript",
+    ".json": "application/json"
+  },
   "auth": {
     "identityProviders": {
       "azureActiveDirectory": {
@@ -12,11 +20,11 @@
   "routes": [
     {
       "route": "/tools/land-parcel-automater/login",
-      "rewrite": "/.auth/login/aad"
+      "rewrite": "/.auth/login/aad?post_login_redirect_uri=/tools/land-parcel-automater/"
     },
     {
       "route": "/tools/land-parcel-automater/logout",
-      "rewrite": "/.auth/logout"
+      "rewrite": "/.auth/logout?post_logout_redirect_uri=/tools/land-parcel-automater/"
     },
     {
       "route": "/tools/land-parcel-automater/*",
@@ -31,6 +39,6 @@
   },
   "navigationFallback": {
     "rewrite": "/tools/land-parcel-automater/index.html",
-    "exclude": ["/assets/*", "/*.{css,scss,js,png,gif,ico,jpg,svg}"]
+    "exclude": ["/tools/land-parcel-automater/_astro/*", "/*.{css,scss,js,png,gif,ico,jpg,svg,json}"]
   }
 }
