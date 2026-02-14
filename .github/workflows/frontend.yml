@@ -89,7 +89,27 @@ jobs:
       - name: Verify Static Web App details
         run: |
           echo "Static Web App details:"
-          az staticwebapp show --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "{name:name,defaultHostname:defaultHostname,repositoryUrl:repositoryUrl}" -o table
+          az staticwebapp show --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "{name:name,defaultHostname:defaultHostname,repositoryUrl:repositoryUrl,branch:branch}" -o json
+          
+          echo ""
+          echo "Checking repository configuration..."
+          REPO_URL=$(az staticwebapp show --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "repositoryUrl" -o tsv)
+          REPO_BRANCH=$(az staticwebapp show --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "branch" -o tsv)
+          
+          echo "Configured repository: $REPO_URL"
+          echo "Configured branch: $REPO_BRANCH"
+          echo "Current repository: ${{ github.repository }}"
+          echo "Current branch: ${{ github.ref_name }}"
+          
+          if [ "$REPO_URL" != "https://github.com/${{ github.repository }}" ]; then
+            echo "⚠️  WARNING: Repository mismatch!"
+            echo "The Static Web App is linked to: $REPO_URL"
+            echo "But this workflow is running from: https://github.com/${{ github.repository }}"
+            echo ""
+            echo "Unlinking the Static Web App from the old repository..."
+            az staticwebapp disconnect --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --yes
+            echo "✓ Disconnected. The deployment should now work."
+          fi
           
           echo ""
           echo "Getting deployment token from Azure to verify..."
