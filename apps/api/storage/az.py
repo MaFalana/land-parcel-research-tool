@@ -23,6 +23,8 @@ def _guess_content_type(name: str) -> ContentSettings | None:
 class AzureStorageManager:
     def __init__(self, container_name: str):
         connection_string = os.getenv("AZURE_CONNECTION_STRING")
+        if not connection_string:
+            raise ValueError("AZURE_CONNECTION_STRING environment variable is not set")
         self.blob_service_client = BlobServiceClient.from_connection_string(connection_string)
         self.container_client = self.blob_service_client.get_container_client(container_name)
         self.container_name = container_name
