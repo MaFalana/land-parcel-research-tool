@@ -1,7 +1,6 @@
 # Land Parcel Automater API
 
 A FastAPI-based photo management application with MongoDB storage and Azure Blob Storage for images. Supports photo metadata management, filtering by date and tags, geolocation features, and export capabilities.
-
 ## Features
 
 
