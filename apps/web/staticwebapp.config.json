@@ -2,11 +2,12 @@
   "platform": {
     "apiRuntime": "node:18"
   },
-  "mimeTypes": {
-    ".css": "text/css",
-    ".js": "application/javascript",
-    ".json": "application/json"
-  },  "auth": {
+  "globalHeaders": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+  },
+  "auth": {
     "identityProviders": {
       "azureActiveDirectory": {
         "registration": {
@@ -17,6 +18,12 @@
     }
   },
   "routes": [
+    {
+      "route": "/tools/land-parcel-automater/_astro/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    },
     {
       "route": "/tools/land-parcel-automater/login",
       "rewrite": "/.auth/login/aad?post_login_redirect_uri=/tools/land-parcel-automater/"
