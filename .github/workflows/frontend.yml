@@ -101,14 +101,16 @@ jobs:
           echo "Current repository: ${{ github.repository }}"
           echo "Current branch: ${{ github.ref_name }}"
           
-          if [ "$REPO_URL" != "https://github.com/${{ github.repository }}" ]; then
-            echo "⚠️  WARNING: Repository mismatch!"
-            echo "The Static Web App is linked to: $REPO_URL"
-            echo "But this workflow is running from: https://github.com/${{ github.repository }}"
+          # If there's ANY repository link, disconnect it to allow API token deployments
+          if [ -n "$REPO_URL" ] && [ "$REPO_URL" != "None" ]; then
             echo ""
-            echo "Unlinking the Static Web App from the old repository..."
+            echo "⚠️  Static Web App is linked to a GitHub repository."
+            echo "This prevents API token deployments from working."
+            echo "Disconnecting to enable API token deployments..."
             az staticwebapp disconnect --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --yes
-            echo "✓ Disconnected. The deployment should now work."
+            echo "✓ Disconnected. The deployment should now work with API token."
+          else
+            echo "✓ No repository link found - API token deployments should work."
           fi
           
           echo ""
@@ -129,20 +131,6 @@ jobs:
               echo "✗ Tokens DO NOT match - please update your GitHub secret"
               echo "First 10 chars of Azure token: ${AZURE_TOKEN:0:10}..."
               echo "First 10 chars of GitHub token: ${GITHUB_TOKEN:0:10}..."
-            fi
-          fi
-          
-          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F }}" ]; then
-            GITHUB_TOKEN_ALT="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F }}"
-            GITHUB_TOKEN_ALT_LENGTH=${#GITHUB_TOKEN_ALT}
-            echo "GitHub secret (AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F) length: $GITHUB_TOKEN_ALT_LENGTH"
-            
-            if [ "$AZURE_TOKEN" = "$GITHUB_TOKEN_ALT" ]; then
-              echo "✓ Tokens match!"
-            else
-              echo "✗ Tokens DO NOT match - please update your GitHub secret"
-              echo "First 10 chars of Azure token: ${AZURE_TOKEN:0:10}..."
-              echo "First 10 chars of GitHub token: ${GITHUB_TOKEN_ALT:0:10}..."
             fi
           fi
 
