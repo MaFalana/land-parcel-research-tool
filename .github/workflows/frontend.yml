@@ -107,7 +107,7 @@ jobs:
             echo "⚠️  Static Web App is linked to a GitHub repository."
             echo "This prevents API token deployments from working."
             echo "Disconnecting to enable API token deployments..."
-            az staticwebapp disconnect --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --yes
+            az staticwebapp disconnect --name ${{ env.STATIC_WEB_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }}
             echo "✓ Disconnected. The deployment should now work with API token."
           else
             echo "✓ No repository link found - API token deployments should work."
