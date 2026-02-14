@@ -6,8 +6,7 @@
     ".css": "text/css",
     ".js": "application/javascript",
     ".json": "application/json"
-  },
-  "auth": {
+  },  "auth": {
     "identityProviders": {
       "azureActiveDirectory": {
         "registration": {
