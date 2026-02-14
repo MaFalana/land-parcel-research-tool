@@ -74,10 +74,8 @@ jobs:
               --set-env-vars \
                 PORT=8000 \
                 MONGO_CONNECTION_STRING="${{ secrets.MONGO_CONNECTION_STRING }}" \
-                MONGO_COLLECTION_NAME="${{ vars.MONGO_COLLECTION_NAME }}" \
-                AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
-                AZURE_STORAGE_CONTAINER_NAME="${{ vars.AZURE_STORAGE_CONTAINER_NAME }}" \
-                NAME="${{ vars.PROJECT_NAME }}"
+                AZURE_CONNECTION_STRING="${{ secrets.AZURE_CONNECTION_STRING }}" \
+                NAME="${{ vars.NAME }}"
           else
             echo "Container App doesn't exist, creating in existing environment: $ENV_NAME"
             
@@ -106,10 +104,8 @@ jobs:
               --env-vars \
                 PORT=8000 \
                 MONGO_CONNECTION_STRING="${{ secrets.MONGO_CONNECTION_STRING }}" \
-                MONGO_COLLECTION_NAME="${{ vars.MONGO_COLLECTION_NAME }}" \
-                AZURE_STORAGE_CONNECTION_STRING="${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}" \
-                AZURE_STORAGE_CONTAINER_NAME="${{ vars.AZURE_STORAGE_CONTAINER_NAME }}" \
-                NAME="${{ vars.PROJECT_NAME }}"
+                AZURE_CONNECTION_STRING="${{ secrets.AZURE_CONNECTION_STRING }}" \
+                NAME="${{ vars.NAME }}"
           fi
           
           echo "Deployment completed successfully!"
