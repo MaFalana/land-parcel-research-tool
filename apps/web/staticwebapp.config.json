@@ -1,0 +1,36 @@
+{
+  "auth": {
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "registration": {
+          "openIdIssuer": "https://login.microsoftonline.com/a1e214b3-26d7-492f-80ee-8e1deb074114",
+          "clientIdSettingName": "AZURE_CLIENT_ID"
+        }
+      }
+    }
+  },
+  "routes": [
+    {
+      "route": "/tools/land-parcel-automater/login",
+      "rewrite": "/.auth/login/aad"
+    },
+    {
+      "route": "/tools/land-parcel-automater/logout",
+      "rewrite": "/.auth/logout"
+    },
+    {
+      "route": "/tools/land-parcel-automater/*",
+      "allowedRoles": ["authenticated"]
+    }
+  ],
+  "responseOverrides": {
+    "401": {
+      "redirect": "/.auth/login/aad?post_login_redirect_uri=/tools/land-parcel-automater/",
+      "statusCode": 302
+    }
+  },
+  "navigationFallback": {
+    "rewrite": "/tools/land-parcel-automater/index.html",
+    "exclude": ["/assets/*", "/*.{css,scss,js,png,gif,ico,jpg,svg}"]
+  }
+}

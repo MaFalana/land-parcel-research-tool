@@ -83,14 +83,24 @@ jobs:
           
           echo "Checking if this matches your token source..."
 
+      - name: Configure Static Web App Authentication
+        run: |
+          echo "Configuring authentication settings..."
+          az staticwebapp appsettings set \
+            --name ${{ env.STATIC_WEB_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --setting-names AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
+          echo "Authentication configured successfully"
+
       - name: Build And Deploy
         env:
           PUBLIC_API_BASE_URL: ${{ vars.PUBLIC_API_BASE_URL }}
+          PUBLIC_APP_BASE_PATH: ${{ vars.PUBLIC_APP_BASE_PATH }}
           PUBLIC_MAPTILER_API_KEY: ${{ vars.PUBLIC_MAPTILER_API_KEY }}
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F }}
           action: "upload"
           ###### Repository/Build Configurations ######
           app_location: "apps/web" # App source code path

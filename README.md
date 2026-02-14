@@ -1,5 +1,21 @@
 # Land Parcel Automater
 
+### Github Secrets
+
+Repository Secrets
+secrets.DOCKERHUB_USERNAME
+secrets.DOCKERHUB_TOKEN
+secrets.AZURE_CREDENTIALS
+secrets.MONGO_CONNECTION_STRING 
+secrets.AZURE_STORAGE_CONNECTION_STRING
+secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F
+secrets.AZURE_CLIENT_ID
+
+Repository Variables
+vars.NAME
+vars.PUBLIC_API_BASE_URL
+vars.PUBLIC_MAPTILER_API_KEY
+vars.PUBLIC_APP_BASE_PATH
 ###
 
 apps\web\src\data\epsg\Indiana.json
