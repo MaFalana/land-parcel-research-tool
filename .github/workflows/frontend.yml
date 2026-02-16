@@ -162,9 +162,9 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F }}
           action: "upload"
           ###### Repository/Build Configurations ######
-          app_location: "apps/web" # App source code path
+          app_location: "apps/web/dist" # Pre-built output directory
           api_location: "" # Api source code path - optional
-          output_location: "dist" # Built app content directory
+          output_location: "" # No additional output, files are already built
           skip_app_build: true # We already built it in previous step
           ###### End of Repository/Build Configurations ######
 
