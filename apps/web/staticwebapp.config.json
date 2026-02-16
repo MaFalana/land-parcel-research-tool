@@ -17,13 +17,16 @@
       }
     }
   },
+  "_comment": "Auth routes disabled temporarily - move from _routes_disabled to routes when admin consent is granted",
   "routes": [
     {
       "route": "/tools/land-parcel-automater/_astro/*",
       "headers": {
         "Cache-Control": "public, max-age=31536000, immutable"
       }
-    },
+    }
+  ],
+  "_routes_disabled": [
     {
       "route": "/tools/land-parcel-automater/login",
       "rewrite": "/.auth/login/aad?post_login_redirect_uri=/tools/land-parcel-automater/"
@@ -37,7 +40,7 @@
       "allowedRoles": ["authenticated"]
     }
   ],
-  "responseOverrides": {
+  "_responseOverrides_disabled": {
     "401": {
       "redirect": "/.auth/login/aad?post_login_redirect_uri=/tools/land-parcel-automater/",
       "statusCode": 302
