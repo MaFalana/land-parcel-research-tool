@@ -168,6 +168,19 @@ class AzureStorageManager:
             stream = self.container_client.download_blob(blob_name)
             f.write(stream.readall())
         print(f"Downloaded {blob_name} to {download_path}")
+    
+    def download_file_bytes(self, blob_name: str) -> bytes:
+        """
+        Download a blob and return its contents as bytes.
+        
+        Args:
+            blob_name: Name of the blob to download
+            
+        Returns:
+            Blob contents as bytes
+        """
+        stream = self.container_client.download_blob(blob_name)
+        return stream.readall()
 
     def delete_blob(self, blob_name: str):
         self.container_client.delete_blob(blob_name)

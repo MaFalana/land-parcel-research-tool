@@ -35,10 +35,6 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
       }
 
       const data = await response.json();
-      // Handle both id and _id from API
-      if (data._id && !data.id) {
-        data.id = data._id;
-      }
       setJob(data);
     } catch (err) {
       setError(err.message);
@@ -58,7 +54,11 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
 
       // Get filename from Content-Disposition header or use default
       const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = `${job.county}_${fileType}.${fileType === 'excel' ? 'xlsx' : 'zip'}`;
+      let defaultExtension = 'dxf';
+      if (fileType === 'excel') defaultExtension = 'xlsx';
+      if (fileType === 'prc') defaultExtension = 'zip';
+      
+      let filename = `${job.county}_${fileType}.${defaultExtension}`;
       
       if (contentDisposition) {
         const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
@@ -140,7 +140,20 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
   };
 
   const formatDate = (timestamp) => {
-    return new Date(timestamp).toLocaleString();
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    // Format in user's local timezone
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hour12: true
+    });
   };
 
   return (
@@ -215,14 +228,21 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
                       onClick={() => handleDownload('excel')}
                     >
                       <MdDownload />
-                      Download Excel
+                      Excel Data
                     </button>
                     <button
                       className="job-detail-download-btn"
                       onClick={() => handleDownload('labels')}
                     >
                       <MdDownload />
-                      Download Labels
+                      Labels (DXF)
+                    </button>
+                    <button
+                      className="job-detail-download-btn"
+                      onClick={() => handleDownload('prc')}
+                    >
+                      <MdDownload />
+                      Property Cards
                     </button>
                   </div>
                 </div>

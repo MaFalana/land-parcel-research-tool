@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime
 import uuid
 import os
 import tempfile
+import io
 from config.main import DB
 from config.settings import MAX_UPLOAD_SIZE_BYTES
 from models.ParcelJob import ParcelJob, ParcelJobProgress, ParcelJobResult
@@ -190,11 +192,18 @@ async def get_job_status(job_id: str, user: Optional[dict] = Depends(get_current
             estimated_remaining_seconds = int(avg_time_per_parcel * parcels_remaining)
     
     response = {
-        "job_id": job.id,
+        "id": job.id,  # Use 'id' instead of 'job_id' for frontend compatibility
         "status": job.status,
         "county": job.county,
         "platform": job.platform,
+        "crs_id": job.crs_id,  # Add CRS ID
+        "parcel_count": job.parcel_count,  # Add parcel count at top level
         "current_step": job.current_step,
+        "error_message": job.error_message,  # Add error message at top level
+        "created_at": (job.created_at.isoformat() + 'Z') if job.created_at else None,
+        "updated_at": (job.updated_at.isoformat() + 'Z') if job.updated_at else None,
+        "started_at": (job.started_at.isoformat() + 'Z') if job.started_at else None,
+        "completed_at": (job.completed_at.isoformat() + 'Z') if job.completed_at else None,
         "progress": {
             "total": job.parcel_count,
             "completed": job.parcels_completed,
@@ -202,10 +211,6 @@ async def get_job_status(job_id: str, user: Optional[dict] = Depends(get_current
             "percentage": round(progress_pct, 2)
         },
         "timing": {
-            "created_at": job.created_at,
-            "started_at": job.started_at,
-            "updated_at": job.updated_at,
-            "completed_at": job.completed_at,
             "elapsed_seconds": elapsed_seconds,
             "estimated_remaining_seconds": estimated_remaining_seconds
         }
@@ -215,19 +220,15 @@ async def get_job_status(job_id: str, user: Optional[dict] = Depends(get_current
     if job.status == "completed" and job.results:
         response["results"] = job.results
     
-    # Add error if failed
-    if job.status == "failed" and job.error_message:
-        response["error"] = job.error_message
-    
     return response
 
 
 @jobs_router.get("/{job_id}/download/{file_type}")
 async def download_job_result(job_id: str, file_type: str, user: Optional[dict] = Depends(get_current_user)):
     """
-    Get download URL for job result files
+    Download job result files directly
     
-    file_type: "excel", "dxf", "prc" (Property Record Cards)
+    file_type: "excel", "labels" (DXF labels ZIP)
     Users can only download their own job results
     """
     job_data = DB.parcelJobsCollection.find_one({"_id": job_id})
@@ -251,11 +252,23 @@ async def download_job_result(job_id: str, file_type: str, user: Optional[dict] 
     if not job.results:
         raise HTTPException(status_code=404, detail="No results available")
     
-    # Map file type to result key
+    # Map file type to result key and content type
     file_map = {
-        "excel": "excel_url",
-        "dxf": "dxf_url",
-        "prc": "prc_zip_url"
+        "excel": {
+            "key": "excel_url",
+            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "extension": "xlsx"
+        },
+        "labels": {
+            "key": "dxf_url",  # This points to labels.dxf file
+            "content_type": "application/dxf",  # DXF is a CAD format
+            "extension": "dxf"
+        },
+        "prc": {
+            "key": "prc_zip_url",
+            "content_type": "application/zip",
+            "extension": "zip"
+        }
     }
     
     if file_type not in file_map:
@@ -264,20 +277,51 @@ async def download_job_result(job_id: str, file_type: str, user: Optional[dict] 
             detail=f"Invalid file type. Allowed: {', '.join(file_map.keys())}"
         )
     
-    url_key = file_map[file_type]
-    download_url = job.results.get(url_key)
+    file_info = file_map[file_type]
+    azure_path = job.results.get(file_info["key"])
     
-    if not download_url:
+    if not azure_path:
         raise HTTPException(
             status_code=404,
             detail=f"{file_type} file not available"
         )
     
-    return {
-        "job_id": job_id,
-        "file_type": file_type,
-        "download_url": download_url
-    }
+    # Extract blob name from URL if it's a full URL
+    # URLs look like: https://account.blob.core.windows.net/container/path/to/file
+    if azure_path.startswith("http"):
+        # Extract the blob path after the container name
+        parts = azure_path.split(f"/{DB.az.container_name}/")
+        if len(parts) > 1:
+            azure_path = parts[1]
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid Azure URL format: {azure_path}"
+            )
+    
+    # Download file from Azure
+    try:
+        file_data = DB.az.download_file_bytes(azure_path)
+        
+        # Create filename
+        filename = f"{job.county}_{file_type}.{file_info['extension']}"
+        
+        # Return file as streaming response
+        return StreamingResponse(
+            io.BytesIO(file_data),
+            media_type=file_info["content_type"],
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        import traceback
+        error_detail = f"Failed to download file from '{azure_path}': {str(e)}\n{traceback.format_exc()}"
+        print(error_detail)  # Log to console
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download file: {str(e)}"
+        )
 
 
 @jobs_router.delete("/{job_id}")
