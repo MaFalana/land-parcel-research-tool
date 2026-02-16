@@ -137,6 +137,7 @@ export function HwcMap({
 
   // Controls
   showControls = true,
+  showZoomControl = true,
   showAttribution = true,
 
   // Base path for assets
@@ -348,7 +349,9 @@ export function HwcMap({
 
         <FitBounds items={validItems} getLatLng={getLatLng} enabled={fitBoundsOnLoad} />
         <MapNavigator targetItem={targetItem} getLatLng={getLatLng} />
-        <MapZoomControls items={validItems} getLatLng={getLatLng} orthoBounds={orthoBounds} />
+        {showZoomControl && (
+          <MapZoomControls items={validItems} getLatLng={getLatLng} orthoBounds={orthoBounds} />
+        )}
 
         {/* GeoJSON Polygon Layer (prop-based API) */}
         {geoJsonData && (

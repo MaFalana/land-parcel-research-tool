@@ -34,7 +34,7 @@ def detect_platform(url: str) -> str:
 @jobs_router.post("/create")
 async def create_parcel_job(
     parcel_file: UploadFile = File(..., description="File containing parcel IDs (TXT, CSV, or XLSX)"),
-    shapefile_zip: UploadFile = File(..., description="ZIP file containing shapefiles"),
+    shapefile_zip: Optional[UploadFile] = File(None, description="ZIP file containing shapefiles (optional if using pre-supplied shapefiles)"),
     county: str = Form(..., description="County name"),
     crs_id: int = Form(..., description="EPSG code for target CRS"),
     gis_url: str = Form(..., description="GIS portal URL"),
@@ -45,32 +45,22 @@ async def create_parcel_job(
     
     Accepts:
     - Parcel file (TXT, CSV, or XLSX) - max 5GB
-    - Shapefile ZIP - max 5GB
+    - Shapefile ZIP (optional) - max 5GB. If not provided, will use pre-supplied shapefiles from Azure
     - County, CRS, and GIS URL
     
     Returns job ID for tracking progress
     """
     job_id = str(uuid.uuid4())
     
-    # Validate file sizes
+    # Validate parcel file size
     parcel_file.file.seek(0, 2)  # Seek to end
     parcel_size = parcel_file.file.tell()
     parcel_file.file.seek(0)  # Reset to start
-    
-    shapefile_zip.file.seek(0, 2)
-    shapefile_size = shapefile_zip.file.tell()
-    shapefile_zip.file.seek(0)
     
     if parcel_size > MAX_UPLOAD_SIZE_BYTES:
         raise HTTPException(
             status_code=413,
             detail=f"Parcel file too large. Max size: {MAX_UPLOAD_SIZE_BYTES / (1024**3):.1f} GB"
-        )
-    
-    if shapefile_size > MAX_UPLOAD_SIZE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Shapefile too large. Max size: {MAX_UPLOAD_SIZE_BYTES / (1024**3):.1f} GB"
         )
     
     # Validate parcel file type
@@ -81,12 +71,37 @@ async def create_parcel_job(
             detail="Invalid parcel file type. Allowed: TXT, CSV, XLSX"
         )
     
-    # Validate shapefile
-    if not shapefile_zip.filename.endswith('.zip'):
-        raise HTTPException(
-            status_code=400,
-            detail="Shapefile must be a ZIP file"
-        )
+    # Handle shapefile: try Azure first, then user upload
+    use_azure_shapefile = False
+    azure_shapefile_source = f"GIS/Indiana/Parcels/Current/{county}.zip"
+    
+    if shapefile_zip is None:
+        # No upload provided, check if Azure has it
+        if DB.az.blob_exists(azure_shapefile_source):
+            use_azure_shapefile = True
+            print(f"Using pre-supplied shapefile from Azure: {azure_shapefile_source}")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No shapefile provided and no pre-supplied shapefile found for {county} county. Please upload a shapefile ZIP."
+            )
+    else:
+        # User provided upload, validate it
+        shapefile_zip.file.seek(0, 2)
+        shapefile_size = shapefile_zip.file.tell()
+        shapefile_zip.file.seek(0)
+        
+        if shapefile_size > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Shapefile too large. Max size: {MAX_UPLOAD_SIZE_BYTES / (1024**3):.1f} GB"
+            )
+        
+        if not shapefile_zip.filename.endswith('.zip'):
+            raise HTTPException(
+                status_code=400,
+                detail="Shapefile must be a ZIP file"
+            )
     
     # Parse parcel IDs to get count
     parcel_ids = await parse_parcel_file(parcel_file)
@@ -108,17 +123,27 @@ async def create_parcel_job(
     with open(parcel_local_path, "wb") as f:
         f.write(await parcel_file.read())
     
-    # Save shapefile ZIP locally
+    # Handle shapefile based on source
     shapefile_local_path = os.path.join(temp_dir, "shapefiles.zip")
-    with open(shapefile_local_path, "wb") as f:
-        f.write(await shapefile_zip.read())
+    azure_shapefile_path = None
     
-    # Upload to Azure for backup/persistence
+    if use_azure_shapefile:
+        # Download from Azure pre-supplied location
+        DB.az.download_file(azure_shapefile_source, shapefile_local_path)
+        # Don't upload back to Azure (it's already there)
+        azure_shapefile_path = azure_shapefile_source
+    else:
+        # Save user-uploaded shapefile locally
+        with open(shapefile_local_path, "wb") as f:
+            f.write(await shapefile_zip.read())
+        
+        # Upload user's shapefile to Azure for backup
+        azure_shapefile_path = f"jobs/{job_id}/shapefiles.zip"
+        DB.az.upload_file(shapefile_local_path, azure_shapefile_path)
+    
+    # Upload parcel file to Azure for backup/persistence
     azure_parcel_path = f"jobs/{job_id}/parcels.{parcel_ext}"
-    azure_shapefile_path = f"jobs/{job_id}/shapefiles.zip"
-    
     DB.az.upload_file(parcel_local_path, azure_parcel_path)
-    DB.az.upload_file(shapefile_local_path, azure_shapefile_path)
     
     # Create job in database
     job = ParcelJob(

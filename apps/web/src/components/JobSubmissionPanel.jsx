@@ -20,6 +20,7 @@ export function JobSubmissionPanel({ isVisible, onClose, selectedCounty, gisUrl 
   const [parcelFile, setParcelFile] = useState(null);
   const [parcelText, setParcelText] = useState('');
   const [shapefileZip, setShapefileZip] = useState(null);
+  const [showShapefileUpload, setShowShapefileUpload] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobResult, setJobResult] = useState(null);
   const [error, setError] = useState('');
@@ -33,6 +34,7 @@ export function JobSubmissionPanel({ isVisible, onClose, selectedCounty, gisUrl 
       setParcelFile(null);
       setParcelText('');
       setShapefileZip(null);
+      setShowShapefileUpload(false);
       setIsSubmitting(false);
       setJobResult(null);
       setError('');
@@ -74,10 +76,7 @@ export function JobSubmissionPanel({ isVisible, onClose, selectedCounty, gisUrl 
         setError('Please provide parcel IDs (file or text)');
         return;
       }
-      if (!shapefileZip) {
-        setError('Please upload a shapefile ZIP');
-        return;
-      }
+      // Shapefile is now optional (will use Azure pre-supplied if not provided)
       setStep(3);
     }
   };
@@ -105,8 +104,11 @@ export function JobSubmissionPanel({ isVisible, onClose, selectedCounty, gisUrl 
         formData.append('parcel_file', blob, 'parcels.txt');
       }
 
-      // Add shapefile
-      formData.append('shapefile_zip', shapefileZip);
+      // Add shapefile only if user provided one
+      if (shapefileZip) {
+        formData.append('shapefile_zip', shapefileZip);
+      }
+      // If no shapefile, backend will use pre-supplied from Azure
       
       // Add metadata
       formData.append('county', selectedCounty);
@@ -179,17 +181,37 @@ export function JobSubmissionPanel({ isVisible, onClose, selectedCounty, gisUrl 
             </div>
 
             <div className="job-panel-section">
-              <label className="job-panel-label">Shapefiles</label>
-              <p className="job-panel-description">
-                Upload a ZIP file containing your shapefiles
-              </p>
-              <FileDropZone
-                acceptedFormats={['.zip']}
-                maxSizeMB={5}
-                onFileSelect={handleShapefileSelect}
-                placeholder="Drop shapefile ZIP here..."
-                onTextPaste={null}
-              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label className="job-panel-label">Shapefiles (Optional)</label>
+                {!showShapefileUpload && (
+                  <button
+                    type="button"
+                    className="job-panel-link-btn"
+                    onClick={() => setShowShapefileUpload(true)}
+                    style={{ fontSize: '0.875rem', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Upload custom shapefiles
+                  </button>
+                )}
+              </div>
+              {!showShapefileUpload ? (
+                <p className="job-panel-description" style={{ fontStyle: 'italic', color: '#6b7280' }}>
+                  Using pre-supplied shapefiles for {selectedCounty} County
+                </p>
+              ) : (
+                <>
+                  <p className="job-panel-description">
+                    Upload a ZIP file containing your shapefiles
+                  </p>
+                  <FileDropZone
+                    acceptedFormats={['.zip']}
+                    maxSizeMB={5}
+                    onFileSelect={handleShapefileSelect}
+                    placeholder="Drop shapefile ZIP here..."
+                    onTextPaste={null}
+                  />
+                </>
+              )}
             </div>
           </div>
         )}
@@ -218,7 +240,9 @@ export function JobSubmissionPanel({ isVisible, onClose, selectedCounty, gisUrl 
               </div>
               <div className="review-item">
                 <span className="review-label">Shapefiles</span>
-                <span className="review-value">{shapefileZip?.name}</span>
+                <span className="review-value">
+                  {shapefileZip ? shapefileZip.name : `Pre-supplied (${selectedCounty} County)`}
+                </span>
               </div>
             </div>
           </div>

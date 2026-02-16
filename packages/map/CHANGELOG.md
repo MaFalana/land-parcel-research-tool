@@ -1,5 +1,13 @@
 # Changelog - @hwc/map
 
+## [0.1.1] - 2026-02-16
+
+### Changed
+- Disabled zoom controls on map for cleaner UI (showZoomControl prop now properly controls MapZoomControls rendering)
+
+### Fixed
+- MapZoomControls now respects the showZoomControl prop (was always rendering before)
+
 ## [0.1.0] - 2025-02-13
 
 ### Added

@@ -45,3 +45,4 @@ apps\web\src\data\gis\Indiana.json
 - [Polygon layer (polygon helper)](https://docs.maptiler.com/sdk-js/examples/helper-polygon-minimal/)
 - [Microsoft Entra ID]()
 - [Indiana County Boundaries](https://hub.arcgis.com/maps/INMap::county-boundaries-of-indiana-2023)
+- [2024 Countywide Shapefiles](https://dataharvest.gio.in.gov/pages/data-access)

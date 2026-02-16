@@ -160,18 +160,23 @@ class LabelExporter:
                 extracted_files.append(rel_path)
         print(f"Extracted files: {extracted_files}")
         
-        # Find the .shp file (search recursively in case files are in subdirectory)
+        # Find the Parcels.shp file specifically (search recursively in case files are in subdirectory)
         shp_path = None
         for root, dirs, files in os.walk(self.shapefile_dir):
             for file in files:
-                if file.endswith('.shp'):
+                # Look for Parcels.shp or Parcel.shp (case-insensitive)
+                if file.lower() in ['parcels.shp', 'parcel.shp']:
                     shp_path = os.path.join(root, file)
                     break
             if shp_path:
                 break
         
         if not shp_path:
-            raise FileNotFoundError(f"No .shp file found in ZIP. Extracted files: {extracted_files}")
+            raise FileNotFoundError(
+                f"No Parcels.shp or Parcel.shp file found in ZIP. "
+                f"Extracted files: {extracted_files}. "
+                f"Please ensure the shapefile is named 'Parcels.shp' or 'Parcel.shp'."
+            )
         
         print(f"Found shapefile: {shp_path}")
         
