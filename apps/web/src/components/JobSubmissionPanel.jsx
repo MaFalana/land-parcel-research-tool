@@ -114,7 +114,7 @@ export function JobSubmissionPanel({ isVisible, onClose, selectedCounty, gisUrl 
       formData.append('gis_url', gisUrl);
 
       // Get API base URL from env
-      const apiBaseUrl = import.meta.env.API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
       
       const response = await fetch(`${apiBaseUrl}/jobs/create`, {
         method: 'POST',

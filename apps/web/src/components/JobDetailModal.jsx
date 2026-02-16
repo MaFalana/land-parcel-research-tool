@@ -27,7 +27,7 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
     setError('');
 
     try {
-      const apiBaseUrl = import.meta.env.API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
       const response = await fetch(`${apiBaseUrl}/jobs/${jobId}`);
 
       if (!response.ok) {
@@ -45,7 +45,7 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
 
   const handleDownload = async (fileType) => {
     try {
-      const apiBaseUrl = import.meta.env.API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
       const response = await fetch(`${apiBaseUrl}/jobs/${jobId}/download/${fileType}`);
 
       if (!response.ok) {
@@ -87,7 +87,7 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
 
     setActionLoading(true);
     try {
-      const apiBaseUrl = import.meta.env.API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
       const response = await fetch(`${apiBaseUrl}/jobs/${jobId}/cancel`, {
         method: 'POST',
       });
@@ -109,7 +109,7 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
 
     setActionLoading(true);
     try {
-      const apiBaseUrl = import.meta.env.API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
       const response = await fetch(`${apiBaseUrl}/jobs/${jobId}`, {
         method: 'DELETE',
       });

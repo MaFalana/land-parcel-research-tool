@@ -38,7 +38,7 @@ export function JobsWidget({ onJobClick }) {
     setError('');
 
     try {
-      const apiBaseUrl = import.meta.env.API_BASE_URL || 'http://localhost:8000';
+      const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
       const response = await fetch(`${apiBaseUrl}/jobs/?limit=10`);
 
       if (!response.ok) {
