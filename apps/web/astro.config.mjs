@@ -7,10 +7,14 @@ export default defineConfig({
   integrations: [react()],
   base: '/tools/land-parcel-automater',
   trailingSlash: 'ignore',
+  build: {
+    assets: '_astro'
+  },
   vite: {
     assetsInclude: ['**/*.geojson'],
     json: {
       stringify: false
-    }
+    },
+    base: '/tools/land-parcel-automater/'
   }
 });
