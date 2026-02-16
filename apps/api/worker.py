@@ -116,10 +116,23 @@ class ParcelJobWorker:
                 print(f"Job {job.id} was cancelled, skipping processing")
                 return
             
-            # Step 1: Update status
+            # Step 1: Verify input files exist, download from Azure if missing
+            import os
+            
+            if not os.path.exists(job.parcel_file_path):
+                print(f"Parcel file not found locally, downloading from Azure: {job.azure_parcel_path}")
+                os.makedirs(os.path.dirname(job.parcel_file_path), exist_ok=True)
+                self.db.az.download_file(job.azure_parcel_path, job.parcel_file_path)
+            
+            if not os.path.exists(job.shapefile_zip_path):
+                print(f"Shapefile not found locally, downloading from Azure: {job.azure_shapefile_path}")
+                os.makedirs(os.path.dirname(job.shapefile_zip_path), exist_ok=True)
+                self.db.az.download_file(job.azure_shapefile_path, job.shapefile_zip_path)
+            
+            # Step 2: Update status
             self._update_job_status(job.id, "processing", "Parsing parcel file")
             
-            # Step 2: Get platform-specific scraper
+            # Step 3: Get platform-specific scraper
             scraper = get_scraper(job.platform)
             
             # Step 3: Scrape parcels
