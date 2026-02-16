@@ -56,7 +56,9 @@ jobs:
           PUBLIC_API_BASE_URL: ${{ vars.PUBLIC_API_BASE_URL }}
           PUBLIC_APP_BASE_PATH: ${{ vars.PUBLIC_APP_BASE_PATH }}
           PUBLIC_MAPTILER_API_KEY: ${{ vars.PUBLIC_MAPTILER_API_KEY }}
-        run: npm run build
+        run: |
+          npm run build
+          cp staticwebapp.config.json dist/
         working-directory: apps/web
 
       - name: Log in to Azure
