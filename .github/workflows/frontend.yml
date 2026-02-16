@@ -60,8 +60,12 @@ jobs:
         run: |
           echo "Checking which token secret is available..."
           
-          # Check AZURE_STATIC_WEB_APPS_API_TOKEN
-          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
+          # Check AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F
+          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F }}" ]; then
+            echo "✓ AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F is set"
+            TOKEN="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F }}"
+            TOKEN_NAME="AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F"
+          elif [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
             echo "✓ AZURE_STATIC_WEB_APPS_API_TOKEN is set"
             TOKEN="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}"
             TOKEN_NAME="AZURE_STATIC_WEB_APPS_API_TOKEN"
@@ -71,7 +75,7 @@ jobs:
             TOKEN_NAME="AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F"
           else
             echo "ERROR: No deployment token secret found!"
-            echo "Please set either AZURE_STATIC_WEB_APPS_API_TOKEN or AZURE_STATIC_WEB_APPS_API_TOKEN_PROUD_FIELD_0FB18A70F"
+            echo "Please set AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F"
             exit 1
           fi
           
@@ -120,10 +124,10 @@ jobs:
           echo "Azure token length: $AZURE_TOKEN_LENGTH"
           
           # Compare with GitHub secret (without revealing the actual values)
-          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}" ]; then
-            GITHUB_TOKEN="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}"
+          if [ -n "${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F }}" ]; then
+            GITHUB_TOKEN="${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F }}"
             GITHUB_TOKEN_LENGTH=${#GITHUB_TOKEN}
-            echo "GitHub secret (AZURE_STATIC_WEB_APPS_API_TOKEN) length: $GITHUB_TOKEN_LENGTH"
+            echo "GitHub secret (AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F) length: $GITHUB_TOKEN_LENGTH"
             
             if [ "$AZURE_TOKEN" = "$GITHUB_TOKEN" ]; then
               echo "✓ Tokens match!"
@@ -151,7 +155,7 @@ jobs:
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F }}
           action: "upload"
           ###### Repository/Build Configurations ######
           app_location: "apps/web" # App source code path
@@ -190,5 +194,5 @@ jobs:
         id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_COAST_0E1B4690F }}
           action: "close"
