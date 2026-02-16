@@ -19,8 +19,8 @@ export function CrsSelect({ value, onChange, placeholder = 'Select coordinate sy
     // Load CRS data
     const loadCrsData = async () => {
       try {
-        const response = await fetch('/src/data/epsg/Indiana.json');
-        const data = await response.json();
+        const module = await import('../data/epsg/Indiana.json');
+        const data = module.default;
         
         // Transform CRS data for combobox
         // Display name only, but search by both name and EPSG code
