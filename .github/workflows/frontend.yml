@@ -167,7 +167,7 @@ jobs:
       - name: Purge Azure Front Door Cache
         if: success()
         run: |
-          echo "Purging Front Door cache..."
+          echo "Purging Front Door cache for land-parcel-automater only..."
           # Get Front Door profile and endpoint names
           FRONTDOOR_PROFILE=$(az afd profile list --resource-group ${{ env.RESOURCE_GROUP }} --query "[0].name" -o tsv)
           FRONTDOOR_ENDPOINT=$(az afd endpoint list --profile-name $FRONTDOOR_PROFILE --resource-group ${{ env.RESOURCE_GROUP }} --query "[0].name" -o tsv)
@@ -178,9 +178,9 @@ jobs:
               --resource-group ${{ env.RESOURCE_GROUP }} \
               --profile-name $FRONTDOOR_PROFILE \
               --endpoint-name $FRONTDOOR_ENDPOINT \
-              --content-paths "/*" \
+              --content-paths "/tools/land-parcel-automater/*" \
               --domains "survey.hwcengineering.com"
-            echo "Cache purge completed"
+            echo "Cache purge completed for /tools/land-parcel-automater/*"
           else
             echo "Front Door not found or not configured, skipping cache purge"
           fi

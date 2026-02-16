@@ -52,6 +52,6 @@
   },
   "navigationFallback": {
     "rewrite": "/tools/land-parcel-automater/index.html",
-    "exclude": ["/tools/land-parcel-automater/_astro/*", "/*.{css,scss,js,png,gif,ico,jpg,svg,json}"]
+    "exclude": ["/tools/land-parcel-automater/_astro/*", "/tools/land-parcel-automater/assets/*", "*.{css,scss,js,png,gif,ico,jpg,svg,json}"]
   }
 }
