@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 env:
-  STATIC_WEB_APP_NAME: hwc-land-parcel-automater
+  STATIC_WEB_APP_NAME: land-parcel-automater
   RESOURCE_GROUP: LiDAR-Breakline-Generator
 
 jobs:
