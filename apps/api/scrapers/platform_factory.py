@@ -2,9 +2,10 @@
 Factory for creating platform-specific scrapers
 """
 from scrapers.base_scraper import BaseScraper
-from scrapers.wthgis_scraper import WTHGISScraper
+from scrapers.thinkgis_scraper import ThinkGISScraper
+from scrapers.beacon_scraper import BeaconScraper
 # TODO: Import other scrapers when implemented
-# from scrapers.beacon_scraper import BeaconScraper
+# from scrapers.elevate_scraper import ElevateScraper
 # from scrapers.elevate_scraper import ElevateScraper
 # from scrapers.portico_scraper import PorticoScraper
 
@@ -14,7 +15,7 @@ def get_scraper(platform: str) -> BaseScraper:
     Get the appropriate scraper for a GIS platform
     
     Args:
-        platform: Platform name (wthgis, beacon, elevate, portico)
+        platform: Platform name (thinkgis, beacon, elevate, portico)
         
     Returns:
         Platform-specific scraper instance
@@ -23,9 +24,10 @@ def get_scraper(platform: str) -> BaseScraper:
         ValueError: If platform is not supported
     """
     scrapers = {
-        "wthgis": WTHGISScraper,
+        "thinkgis": ThinkGISScraper,
+        "beacon": BeaconScraper,
         # TODO: Add other scrapers
-        # "beacon": BeaconScraper,
+        # "elevate": ElevateScraper,
         # "elevate": ElevateScraper,
         # "portico": PorticoScraper,
     }
