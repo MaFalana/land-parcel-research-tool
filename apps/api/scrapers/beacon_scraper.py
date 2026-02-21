@@ -211,6 +211,8 @@ class BeaconScraper(BaseScraper):
                                     print(f"  ✓ Downloaded PRC: {pdf_filename}")
                                 except Exception as e:
                                     print(f"  ✗ Failed to download PRC: {e}")
+                                    import traceback
+                                    traceback.print_exc()
                                     prc_path = f"ERROR: {str(e)[:50]}"
                             
                             ws.cell(row_num, 15, prc_path)  # Column O: Report Card Path
@@ -244,6 +246,8 @@ class BeaconScraper(BaseScraper):
                         
                     except Exception as e:
                         print(f"Error processing {parcel_id}: {e}")
+                        import traceback
+                        traceback.print_exc()
                         ws.cell(row_num, 1, parcel_id)
                         ws.cell(row_num, 16, f'ERROR: {str(e)[:50]}')
                         failed += 1
@@ -488,9 +492,12 @@ class BeaconScraper(BaseScraper):
             
         except Exception as e:
             print(f"Error searching for parcel {parcel_id}: {e}")
+            import traceback
+            traceback.print_exc()
             # Try to recover by going back to search page
             try:
-                page.goto(base_url)
+                page.goto(base_url, wait_until="domcontentloaded")
+                page.wait_for_timeout(2000)
             except:
                 pass
             return None
