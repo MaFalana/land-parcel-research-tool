@@ -167,18 +167,26 @@ class BeaconScraper(BaseScraper):
                         if parcel_data:
                             # Write to Excel
                             ws.cell(row_num, 1, parcel_id)  # Column A: Parcel ID
-                            ws.cell(row_num, 2, parcel_data.get('owner_name', ''))  # Column B: Owner
-                            ws.cell(row_num, 3, parcel_data.get('legal_description', ''))  # Column C: Legal Desc
-                            ws.cell(row_num, 4, parcel_data.get('latest_deed_date', ''))  # Column D: Deed Date
-                            ws.cell(row_num, 5, parcel_data.get('document_number', ''))  # Column E: Doc #
-                            ws.cell(row_num, 6, parcel_data.get('deed_code', ''))  # Column F: Deed Type
-                            ws.cell(row_num, 7, 'SUCCESS')  # Column G: Status
+                            ws.cell(row_num, 2, parcel_data.get('owner_name', ''))  # Column B: Owner Name
+                            ws.cell(row_num, 3, parcel_data.get('owner_address', ''))  # Column C: Owner Address
+                            ws.cell(row_num, 4, parcel_data.get('owner_city', ''))  # Column D: Owner City
+                            ws.cell(row_num, 5, parcel_data.get('owner_state', ''))  # Column E: Owner State
+                            ws.cell(row_num, 6, parcel_data.get('owner_zip', ''))  # Column F: Owner Zip
+                            ws.cell(row_num, 7, parcel_data.get('parcel_address', ''))  # Column G: Parcel Address
+                            ws.cell(row_num, 8, parcel_data.get('parcel_city', ''))  # Column H: Parcel City
+                            ws.cell(row_num, 9, parcel_data.get('parcel_state', ''))  # Column I: Parcel State
+                            ws.cell(row_num, 10, parcel_data.get('parcel_zip', ''))  # Column J: Parcel Zip
+                            ws.cell(row_num, 11, parcel_data.get('legal_description', ''))  # Column K: Legal Desc
+                            ws.cell(row_num, 12, parcel_data.get('latest_deed_date', ''))  # Column L: Deed Date
+                            ws.cell(row_num, 13, parcel_data.get('document_number', ''))  # Column M: Doc #
+                            ws.cell(row_num, 14, parcel_data.get('deed_code', ''))  # Column N: Deed Type
+                            ws.cell(row_num, 15, 'SUCCESS')  # Column O: Status
                             
                             processed += 1
                         else:
                             # Parcel not found
                             ws.cell(row_num, 1, parcel_id)
-                            ws.cell(row_num, 7, 'NOT_FOUND')
+                            ws.cell(row_num, 15, 'NOT_FOUND')
                             failed += 1
                         
                         # Save progress every 10 parcels
@@ -196,7 +204,7 @@ class BeaconScraper(BaseScraper):
                     except Exception as e:
                         print(f"Error processing {parcel_id}: {e}")
                         ws.cell(row_num, 1, parcel_id)
-                        ws.cell(row_num, 7, f'ERROR: {str(e)[:50]}')
+                        ws.cell(row_num, 15, f'ERROR: {str(e)[:50]}')
                         failed += 1
                         continue
                 
@@ -229,6 +237,57 @@ class BeaconScraper(BaseScraper):
             'page_type_id': params.get('PageTypeID', ['1'])[0],
             'page_id': params.get('PageID', [''])[0]
         }
+    
+    def _parse_address(self, address_text: str) -> Dict[str, str]:
+        """
+        Parse address text into components (street, city, state, zip)
+        
+        Handles formats like:
+        - "123 Main St, City, ST 12345"
+        - "123 Main St\nCity, ST 12345"
+        - "123 Main St City ST 12345"
+        """
+        import re
+        
+        result = {
+            'street': '',
+            'city': '',
+            'state': '',
+            'zip': ''
+        }
+        
+        if not address_text:
+            return result
+        
+        # Replace newlines with commas for easier parsing
+        address_text = address_text.replace('\n', ', ').replace('\r', '')
+        
+        # Try to extract ZIP code (5 digits or 5+4 format)
+        zip_match = re.search(r'\b(\d{5}(?:-\d{4})?)\b', address_text)
+        if zip_match:
+            result['zip'] = zip_match.group(1)
+            # Remove ZIP from text
+            address_text = address_text.replace(zip_match.group(0), '').strip()
+        
+        # Try to extract state (2 letter code before ZIP)
+        state_match = re.search(r'\b([A-Z]{2})\s*,?\s*$', address_text)
+        if state_match:
+            result['state'] = state_match.group(1)
+            # Remove state from text
+            address_text = address_text[:state_match.start()].strip()
+        
+        # Split remaining text by comma
+        parts = [p.strip() for p in address_text.split(',') if p.strip()]
+        
+        if len(parts) >= 2:
+            # First part is street, last part is city
+            result['street'] = parts[0]
+            result['city'] = parts[-1]
+        elif len(parts) == 1:
+            # Only one part - assume it's the street
+            result['street'] = parts[0]
+        
+        return result
     
     def _search_parcel(self, page, parcel_id: str, base_url: str) -> Optional[Dict]:
         """
@@ -273,6 +332,43 @@ class BeaconScraper(BaseScraper):
                 data['owner_name'] = owner_elem.inner_text(timeout=2000).strip()
             except:
                 data['owner_name'] = ''
+            
+            # Owner address (mailing address)
+            try:
+                # Try to find owner address - usually in a span with "Address" in the ID
+                owner_addr_elem = page.locator('span[id*="lblOwnerAddress"], span[id*="OwnerAddress"]').first
+                owner_addr_text = owner_addr_elem.inner_text(timeout=2000).strip()
+                
+                # Parse address into components
+                # Format is usually: "123 Main St, City, ST 12345" or multiple lines
+                addr_parts = self._parse_address(owner_addr_text)
+                data['owner_address'] = addr_parts.get('street', '')
+                data['owner_city'] = addr_parts.get('city', '')
+                data['owner_state'] = addr_parts.get('state', '')
+                data['owner_zip'] = addr_parts.get('zip', '')
+            except:
+                data['owner_address'] = ''
+                data['owner_city'] = ''
+                data['owner_state'] = ''
+                data['owner_zip'] = ''
+            
+            # Parcel address (property location)
+            try:
+                # Try to find parcel/property address
+                parcel_addr_elem = page.locator('span[id*="lblPropertyAddress"], span[id*="lblSitusAddress"], span[id*="lblLocation"]').first
+                parcel_addr_text = parcel_addr_elem.inner_text(timeout=2000).strip()
+                
+                # Parse address into components
+                addr_parts = self._parse_address(parcel_addr_text)
+                data['parcel_address'] = addr_parts.get('street', '')
+                data['parcel_city'] = addr_parts.get('city', '')
+                data['parcel_state'] = addr_parts.get('state', '')
+                data['parcel_zip'] = addr_parts.get('zip', '')
+            except:
+                data['parcel_address'] = ''
+                data['parcel_city'] = ''
+                data['parcel_state'] = ''
+                data['parcel_zip'] = ''
             
             # Legal description
             try:
@@ -340,6 +436,14 @@ class BeaconScraper(BaseScraper):
         headers = [
             'Parcel ID',
             'Owner Name',
+            'Owner Address',
+            'Owner City',
+            'Owner State',
+            'Owner Zip',
+            'Parcel Address',
+            'Parcel City',
+            'Parcel State',
+            'Parcel Zip',
             'Legal Description',
             'Latest Deed Date',
             'Document Number',
@@ -361,11 +465,19 @@ class BeaconScraper(BaseScraper):
         # Set column widths
         ws.column_dimensions['A'].width = 20  # Parcel ID
         ws.column_dimensions['B'].width = 30  # Owner Name
-        ws.column_dimensions['C'].width = 50  # Legal Description
-        ws.column_dimensions['D'].width = 15  # Deed Date
-        ws.column_dimensions['E'].width = 20  # Document Number
-        ws.column_dimensions['F'].width = 12  # Deed Type
-        ws.column_dimensions['G'].width = 15  # Status
+        ws.column_dimensions['C'].width = 30  # Owner Address
+        ws.column_dimensions['D'].width = 20  # Owner City
+        ws.column_dimensions['E'].width = 8   # Owner State
+        ws.column_dimensions['F'].width = 12  # Owner Zip
+        ws.column_dimensions['G'].width = 30  # Parcel Address
+        ws.column_dimensions['H'].width = 20  # Parcel City
+        ws.column_dimensions['I'].width = 8   # Parcel State
+        ws.column_dimensions['J'].width = 12  # Parcel Zip
+        ws.column_dimensions['K'].width = 50  # Legal Description
+        ws.column_dimensions['L'].width = 15  # Deed Date
+        ws.column_dimensions['M'].width = 20  # Document Number
+        ws.column_dimensions['N'].width = 12  # Deed Type
+        ws.column_dimensions['O'].width = 15  # Status
         
         # Freeze header row
         ws.freeze_panes = 'A2'
