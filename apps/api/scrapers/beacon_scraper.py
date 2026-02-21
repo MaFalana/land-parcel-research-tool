@@ -52,8 +52,16 @@ class BeaconScraper(BaseScraper):
         Returns:
             Dict with excel_path and stats
         """
+        # IMMEDIATE DEBUG
+        print("=" * 60)
+        print("SCRAPER STARTED")
+        print(f"Parcel file: {parcel_file_path}")
+        print(f"Base URL: {base_url}")
+        print(f"County: {county}")
+        print("=" * 60)
+        
         # Parse parcel IDs
-        parcel_ids = self._parse_parcel_file(parcel_file_path)
+        parcel_ids = self.read_parcel_ids(parcel_file_path)
         total_parcels = len(parcel_ids)
         
         print(f"Beacon Scraper: Processing {total_parcels} parcels for {county} county")
@@ -78,24 +86,73 @@ class BeaconScraper(BaseScraper):
         processed = 0
         failed = 0
         
-        # Launch browser
+        # Launch browser (headless mode with args to avoid detection)
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-dev-shm-usage',
+                    '--no-sandbox'
+                ]
+            )
+            context = browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
             page = context.new_page()
             
             try:
                 # Navigate to Beacon portal
-                page.goto(base_url, wait_until="networkidle", timeout=30000)
+                print(f"Navigating to: {base_url}")
+                page.goto(base_url, wait_until="domcontentloaded", timeout=60000)
                 
-                # Click "Agree" button if present
+                # Wait a bit for page to settle (don't wait for networkidle - Beacon has background activity)
+                page.wait_for_timeout(3000)
+                
+                # Check if we got an error page
+                if "Something went wrong" in page.content():
+                    print("Error page detected, retrying...")
+                    page.reload(wait_until="domcontentloaded")
+                    page.wait_for_timeout(3000)
+                
+                # Click "Agree" or "Accept" button if present (terms and conditions)
+                print("Checking for terms agreement...")
                 try:
-                    agree_button = page.locator('text=Agree').first
-                    if agree_button.is_visible(timeout=3000):
-                        agree_button.click()
-                        page.wait_for_load_state("networkidle")
-                except:
+                    # Try multiple variations of agree/accept buttons
+                    agree_selectors = [
+                        'text=Agree',
+                        'text=Accept',
+                        'button:has-text("Agree")',
+                        'button:has-text("Accept")',
+                        'input[value*="Agree"]',
+                        'input[value*="Accept"]'
+                    ]
+                    
+                    for selector in agree_selectors:
+                        try:
+                            button = page.locator(selector).first
+                            if button.is_visible(timeout=3000):
+                                print(f"Found agreement button: {selector}")
+                                button.click()
+                                # Wait for dialog to close
+                                page.wait_for_timeout(3000)
+                                print("Clicked terms agreement button, page ready")
+                                break
+                        except:
+                            continue
+                except Exception as e:
+                    print(f"No agreement button found or error: {e}")
                     pass  # No agree button, continue
+                
+                # Wait for search input to be available
+                print("Waiting for search input to be ready...")
+                try:
+                    page.wait_for_selector('input[id*="txtParcelID"]', state="visible", timeout=10000)
+                    print("Search input is ready")
+                except Exception as e:
+                    print(f"Warning: Search input not found immediately: {e}")
+                    # Try waiting a bit more
+                    page.wait_for_timeout(3000)
                 
                 # Process each parcel
                 for idx, parcel_id in enumerate(parcel_ids, start=1):
@@ -181,16 +238,19 @@ class BeaconScraper(BaseScraper):
                           document_number, deed_code
         """
         try:
-            # Find search input using flexible selector
+            # Find search input using flexible selector with explicit wait
             search_input = page.locator('input[id*="txtParcelID"]').first
             
+            # Wait for it to be ready
+            search_input.wait_for(state="visible", timeout=10000)
+            
             # Clear and fill search box
-            search_input.clear()
-            search_input.fill(parcel_id)
+            search_input.clear(timeout=5000)
+            search_input.fill(parcel_id, timeout=5000)
             search_input.press('Enter')
             
-            # Wait for results to load
-            page.wait_for_load_state("networkidle", timeout=10000)
+            # Wait for results to load (don't use networkidle - Beacon has background activity)
+            page.wait_for_timeout(3000)
             
             # Check if we got results or "no results" message
             # Beacon shows property details if found, or stays on search page if not
@@ -256,8 +316,8 @@ class BeaconScraper(BaseScraper):
                 data['deed_code'] = ''
             
             # Go back to search page for next parcel
-            page.goto(base_url)
-            page.wait_for_load_state("networkidle")
+            page.goto(base_url, wait_until="domcontentloaded")
+            page.wait_for_timeout(2000)
             
             return data
             
