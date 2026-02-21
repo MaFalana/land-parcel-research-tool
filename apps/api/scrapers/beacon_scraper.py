@@ -78,6 +78,13 @@ class BeaconScraper(BaseScraper):
         
         print(f"Beacon Config: AppID={url_params['app_id']}, LayerID={url_params['layer_id']}")
         
+        # Build search page URL (always use PageTypeID=2 for search)
+        # Extract base domain from URL
+        from urllib.parse import urlparse
+        parsed = urlparse(base_url)
+        search_url = f"{parsed.scheme}://{parsed.netloc}/Application.aspx?AppID={url_params['app_id']}&LayerID={url_params['layer_id']}&PageTypeID=2&PageID={url_params['page_id']}"
+        print(f"Using search URL: {search_url}")
+        
         # Create output directories
         output_dir = os.path.join(tempfile.gettempdir(), "parcel_jobs", job_id, "output")
         pdfs_dir = os.path.join(output_dir, "property_cards")
@@ -117,9 +124,9 @@ class BeaconScraper(BaseScraper):
             page = context.new_page()
             
             try:
-                # Navigate to Beacon portal
-                print(f"Navigating to: {base_url}")
-                page.goto(base_url, wait_until="domcontentloaded", timeout=60000)
+                # Navigate to Beacon portal (use search page URL)
+                print(f"Navigating to: {search_url}")
+                page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
                 
                 # Wait a bit for page to settle (don't wait for networkidle - Beacon has background activity)
                 page.wait_for_timeout(3000)
@@ -132,6 +139,7 @@ class BeaconScraper(BaseScraper):
                 
                 # Click "Agree" or "Accept" button if present (terms and conditions)
                 print("Checking for terms agreement...")
+                agreement_clicked = False
                 try:
                     # Try multiple variations of agree/accept buttons
                     agree_selectors = [
@@ -149,9 +157,10 @@ class BeaconScraper(BaseScraper):
                             if button.is_visible(timeout=3000):
                                 print(f"Found agreement button: {selector}")
                                 button.click()
-                                # Wait for dialog to close
-                                page.wait_for_timeout(3000)
-                                print("Clicked terms agreement button, page ready")
+                                agreement_clicked = True
+                                # Wait for navigation/reload after clicking agree
+                                page.wait_for_timeout(5000)
+                                print("Clicked terms agreement button")
                                 break
                         except:
                             continue
@@ -159,15 +168,29 @@ class BeaconScraper(BaseScraper):
                     print(f"No agreement button found or error: {e}")
                     pass  # No agree button, continue
                 
+                # If we clicked agreement, we might need to navigate back to search page
+                if agreement_clicked:
+                    print("Re-navigating to search page after agreement...")
+                    page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
+                    page.wait_for_timeout(3000)
+                
                 # Wait for search input to be available
                 print("Waiting for search input to be ready...")
                 try:
-                    page.wait_for_selector('input[id*="txtParcelID"]', state="visible", timeout=10000)
+                    page.wait_for_selector('input[id*="txtParcelID"]', state="visible", timeout=15000)
                     print("Search input is ready")
                 except Exception as e:
-                    print(f"Warning: Search input not found immediately: {e}")
-                    # Try waiting a bit more
-                    page.wait_for_timeout(3000)
+                    print(f"ERROR: Search input not found: {e}")
+                    print(f"Current URL: {page.url}")
+                    print(f"Page title: {page.title()}")
+                    # Save screenshot for debugging
+                    try:
+                        screenshot_path = f"/tmp/beacon_debug_{job_id}.png"
+                        page.screenshot(path=screenshot_path)
+                        print(f"Screenshot saved to: {screenshot_path}")
+                    except:
+                        pass
+                    raise Exception("Search input not found on page")
                 
                 # Process each parcel
                 for idx, parcel_id in enumerate(parcel_ids, start=1):
@@ -177,7 +200,7 @@ class BeaconScraper(BaseScraper):
                         print(f"Processing {idx}/{total_parcels}: {parcel_id}")
                         
                         # Search for parcel and extract data
-                        parcel_data = self._search_parcel(page, parcel_id, base_url)
+                        parcel_data = self._search_parcel(page, parcel_id, search_url)
                         
                         if parcel_data:
                             # Write to Excel
@@ -336,19 +359,37 @@ class BeaconScraper(BaseScraper):
         
         return result
     
-    def _search_parcel(self, page, parcel_id: str, base_url: str) -> Optional[Dict]:
+    def _search_parcel(self, page, parcel_id: str, search_url: str) -> Optional[Dict]:
         """
         Search for a parcel and extract data using flexible selectors
         
+        Args:
+            page: Playwright page object
+            parcel_id: Parcel ID to search for
+            search_url: URL of the search page (PageTypeID=2)
+        
         Returns dict with: owner_name, legal_description, latest_deed_date, 
-                          document_number, deed_code
+                          document_number, deed_code, prc_url
         """
         try:
             # Find search input using flexible selector with explicit wait
             search_input = page.locator('input[id*="txtParcelID"]').first
             
             # Wait for it to be ready
-            search_input.wait_for(state="visible", timeout=10000)
+            try:
+                search_input.wait_for(state="visible", timeout=10000)
+            except Exception as e:
+                print(f"ERROR: Cannot find search input for parcel {parcel_id}")
+                print(f"Current URL: {page.url}")
+                print(f"Expected search URL: {search_url}")
+                # Check if we're on the right page
+                if "PageTypeID=2" not in page.url:
+                    print("WARNING: Not on search page! Navigating...")
+                    page.goto(search_url, wait_until="domcontentloaded")
+                    page.wait_for_timeout(3000)
+                    search_input.wait_for(state="visible", timeout=10000)
+                else:
+                    raise e
             
             # Clear and fill search box
             search_input.clear(timeout=5000)
@@ -367,7 +408,7 @@ class BeaconScraper(BaseScraper):
             except:
                 # Legal description not found = parcel not found
                 print(f"Parcel {parcel_id} not found in Beacon")
-                page.goto(base_url)  # Go back to search page
+                page.goto(search_url)  # Go back to search page
                 return None
             
             # Extract data
@@ -470,10 +511,10 @@ class BeaconScraper(BaseScraper):
                     
                     # Make absolute URL if relative
                     if prc_href.startswith('/'):
-                        base_domain = f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}"
+                        base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
                         prc_href = base_domain + prc_href
                     elif not prc_href.startswith('http'):
-                        base_domain = f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}"
+                        base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
                         prc_href = base_domain + '/' + prc_href
                     
                     data['prc_url'] = prc_href
@@ -485,7 +526,7 @@ class BeaconScraper(BaseScraper):
                 data['prc_url'] = None
             
             # Go back to search page for next parcel
-            page.goto(base_url, wait_until="domcontentloaded")
+            page.goto(search_url, wait_until="domcontentloaded")
             page.wait_for_timeout(2000)
             
             return data
@@ -496,7 +537,7 @@ class BeaconScraper(BaseScraper):
             traceback.print_exc()
             # Try to recover by going back to search page
             try:
-                page.goto(base_url, wait_until="domcontentloaded")
+                page.goto(search_url, wait_until="domcontentloaded")
                 page.wait_for_timeout(2000)
             except:
                 pass
