@@ -10,6 +10,8 @@ import os
 import tempfile
 import time
 import random
+import re
+import requests
 from urllib.parse import urlparse, parse_qs
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 import openpyxl
@@ -23,6 +25,9 @@ class BeaconScraper(BaseScraper):
     def __init__(self):
         super().__init__()
         self.platform_name = "Beacon"
+        # Delay ranges (in seconds) - more conservative than ThinkGIS
+        self.page_delay_range = (3, 7)  # 3-7 seconds between page requests
+        self.pdf_delay_range = (2, 5)   # 2-5 seconds before PDF downloads
     
     def scrape_parcels(
         self,
@@ -73,9 +78,10 @@ class BeaconScraper(BaseScraper):
         
         print(f"Beacon Config: AppID={url_params['app_id']}, LayerID={url_params['layer_id']}")
         
-        # Create output directory
-        output_dir = os.path.join(tempfile.gettempdir(), "parcel_jobs", job_id)
-        os.makedirs(output_dir, exist_ok=True)
+        # Create output directories
+        output_dir = os.path.join(tempfile.gettempdir(), "parcel_jobs", job_id, "output")
+        pdfs_dir = os.path.join(output_dir, "property_cards")
+        os.makedirs(pdfs_dir, exist_ok=True)
         
         # Create Excel workbook
         excel_path = os.path.join(output_dir, f"{county}_beacon_data.xlsx")
@@ -85,6 +91,15 @@ class BeaconScraper(BaseScraper):
         # Track progress
         processed = 0
         failed = 0
+        
+        # Create requests session for PDF downloads
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/pdf,*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
+        })
         
         # Launch browser (headless mode with args to avoid detection)
         with sync_playwright() as p:
@@ -161,7 +176,7 @@ class BeaconScraper(BaseScraper):
                     try:
                         print(f"Processing {idx}/{total_parcels}: {parcel_id}")
                         
-                        # Search for parcel
+                        # Search for parcel and extract data
                         parcel_data = self._search_parcel(page, parcel_id, base_url)
                         
                         if parcel_data:
@@ -180,13 +195,32 @@ class BeaconScraper(BaseScraper):
                             ws.cell(row_num, 12, parcel_data.get('latest_deed_date', ''))  # Column L: Deed Date
                             ws.cell(row_num, 13, parcel_data.get('document_number', ''))  # Column M: Doc #
                             ws.cell(row_num, 14, parcel_data.get('deed_code', ''))  # Column N: Deed Type
-                            ws.cell(row_num, 15, 'SUCCESS')  # Column O: Status
+                            
+                            # Download PRC PDF if available
+                            prc_path = ''
+                            if parcel_data.get('prc_url'):
+                                try:
+                                    # Create filename: {owner_stub}_{parcel_id}.pdf
+                                    owner_stub = self._owner_filename_stub(parcel_data.get('owner_name', 'Unknown'))
+                                    pdf_filename = self._safe_filename(f"{owner_stub}_{parcel_id}.pdf")
+                                    prc_full_path = os.path.join(pdfs_dir, pdf_filename)
+                                    
+                                    # Download PRC with polite delay
+                                    self._download_prc(session, parcel_data['prc_url'], prc_full_path)
+                                    prc_path = prc_full_path
+                                    print(f"  ✓ Downloaded PRC: {pdf_filename}")
+                                except Exception as e:
+                                    print(f"  ✗ Failed to download PRC: {e}")
+                                    prc_path = f"ERROR: {str(e)[:50]}"
+                            
+                            ws.cell(row_num, 15, prc_path)  # Column O: Report Card Path
+                            ws.cell(row_num, 16, 'SUCCESS')  # Column P: Status
                             
                             processed += 1
                         else:
                             # Parcel not found
                             ws.cell(row_num, 1, parcel_id)
-                            ws.cell(row_num, 15, 'NOT_FOUND')
+                            ws.cell(row_num, 16, 'NOT_FOUND')
                             failed += 1
                         
                         # Save progress every 10 parcels
@@ -198,13 +232,20 @@ class BeaconScraper(BaseScraper):
                         if progress_callback:
                             progress_callback(idx, total_parcels)
                         
-                        # Polite delay (2-5 seconds)
-                        time.sleep(random.uniform(2.0, 5.0))
+                        # Polite delay between parcels (3-7 seconds)
+                        delay = random.uniform(*self.page_delay_range)
+                        time.sleep(delay)
+                        
+                        # Extra "thinking pause" every 15 parcels (10-15 seconds)
+                        if idx % 15 == 0 and idx < total_parcels:
+                            thinking_pause = random.uniform(10, 15)
+                            print(f"  💭 Taking a thinking pause ({thinking_pause:.1f}s)...")
+                            time.sleep(thinking_pause)
                         
                     except Exception as e:
                         print(f"Error processing {parcel_id}: {e}")
                         ws.cell(row_num, 1, parcel_id)
-                        ws.cell(row_num, 15, f'ERROR: {str(e)[:50]}')
+                        ws.cell(row_num, 16, f'ERROR: {str(e)[:50]}')
                         failed += 1
                         continue
                 
@@ -218,9 +259,11 @@ class BeaconScraper(BaseScraper):
         print(f"  Processed: {processed}/{total_parcels}")
         print(f"  Failed: {failed}")
         print(f"  Excel: {excel_path}")
+        print(f"  PDFs: {pdfs_dir}")
         
         return {
             "excel_path": excel_path,
+            "pdfs_dir": pdfs_dir,
             "total": total_parcels,
             "processed": processed,
             "failed": failed
@@ -411,6 +454,32 @@ class BeaconScraper(BaseScraper):
                 data['document_number'] = ''
                 data['deed_code'] = ''
             
+            # Extract PRC (Property Record Card) URL
+            # Look for the most recent PRC link - usually in a "Files" or "Documents" section
+            try:
+                # Try to find PRC links - they usually have "PropertyRecordCard" or similar in the href
+                prc_links = page.locator('a[href*="PropertyRecordCard"], a[href*="RecordCard"], a[href*=".pdf"]').all()
+                
+                if prc_links:
+                    # Get the first (most recent) PRC link
+                    prc_href = prc_links[0].get_attribute('href')
+                    
+                    # Make absolute URL if relative
+                    if prc_href.startswith('/'):
+                        base_domain = f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}"
+                        prc_href = base_domain + prc_href
+                    elif not prc_href.startswith('http'):
+                        base_domain = f"{urlparse(base_url).scheme}://{urlparse(base_url).netloc}"
+                        prc_href = base_domain + '/' + prc_href
+                    
+                    data['prc_url'] = prc_href
+                    print(f"  Found PRC URL: {prc_href}")
+                else:
+                    data['prc_url'] = None
+            except Exception as e:
+                print(f"Could not find PRC URL: {e}")
+                data['prc_url'] = None
+            
             # Go back to search page for next parcel
             page.goto(base_url, wait_until="domcontentloaded")
             page.wait_for_timeout(2000)
@@ -448,6 +517,7 @@ class BeaconScraper(BaseScraper):
             'Latest Deed Date',
             'Document Number',
             'Deed Type',
+            'Report Card Path',
             'Status'
         ]
         
@@ -477,9 +547,55 @@ class BeaconScraper(BaseScraper):
         ws.column_dimensions['L'].width = 15  # Deed Date
         ws.column_dimensions['M'].width = 20  # Document Number
         ws.column_dimensions['N'].width = 12  # Deed Type
-        ws.column_dimensions['O'].width = 15  # Status
+        ws.column_dimensions['O'].width = 50  # Report Card Path
+        ws.column_dimensions['P'].width = 15  # Status
         
         # Freeze header row
         ws.freeze_panes = 'A2'
         
         return wb
+
+    def _safe_filename(self, filename: str) -> str:
+        """Make a filename safe for filesystem"""
+        # Remove or replace unsafe characters
+        safe = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        # Remove leading/trailing spaces and dots
+        safe = safe.strip('. ')
+        # Limit length
+        if len(safe) > 200:
+            name, ext = os.path.splitext(safe)
+            safe = name[:196] + ext
+        return safe
+    
+    def _owner_filename_stub(self, owner_name: str) -> str:
+        """Create a short filename stub from owner name"""
+        if not owner_name:
+            return "Unknown"
+        
+        # Take first 30 chars, remove special chars
+        stub = owner_name[:30]
+        stub = re.sub(r'[^a-zA-Z0-9\s]', '', stub)
+        stub = stub.strip().replace(' ', '_')
+        
+        return stub if stub else "Unknown"
+    
+    def _download_prc(self, session, url: str, output_path: str):
+        """Download Property Record Card PDF with polite delay"""
+        # Check if already downloaded
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return output_path
+        
+        # Polite delay before PDF download
+        delay = random.uniform(*self.pdf_delay_range)
+        time.sleep(delay)
+        
+        # Download PDF
+        response = session.get(url, timeout=45)
+        response.raise_for_status()
+        
+        # Save to file
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'wb') as f:
+            f.write(response.content)
+        
+        return output_path
