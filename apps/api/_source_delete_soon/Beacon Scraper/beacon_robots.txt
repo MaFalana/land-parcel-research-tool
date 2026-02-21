@@ -1,0 +1,27 @@
+User-agent: Mediapartners-Google 
+Disallow:
+
+User-agent: *
+Disallow: /Application.aspx
+Disallow: /application.aspx
+Disallow: /lastupdated.aspx
+Disallow: /Lastupdated.aspx
+Disallow: /LastUpdated.aspx
+Disallow: /print.aspx
+Disallow: /Print.aspx
+Disallow: /renderpdf.aspx
+Disallow: /Renderpdf.aspx
+Disallow: /RenderPdf.aspx
+Disallow: /RenderPDF.aspx
+Disallow: /help.aspx
+Disallow: /Help.aspx
+Disallow: /filedata/
+Disallow: /Filedata/
+Disallow: /FileData/
+Disallow: /modules/
+Disallow: /Modules/
+Disallow: /photoengine/
+Disallow: /Photoengine/
+Allow: /
+
+Sitemap: https://beacon.schneidercorp.com/sitemap.aspx

@@ -175,12 +175,26 @@ class BeaconScraper(BaseScraper):
                     page.wait_for_timeout(3000)
                 
                 # Wait for search input to be available
+                # Try multiple possible selectors (Beacon has different versions)
                 print("Waiting for search input to be ready...")
-                try:
-                    page.wait_for_selector('input[id*="txtParcelID"]', state="visible", timeout=15000)
-                    print("Search input is ready")
-                except Exception as e:
-                    print(f"ERROR: Search input not found: {e}")
+                search_input_found = False
+                search_selectors = [
+                    'input#topSearchControl',  # New Beacon interface
+                    'input[id*="txtParcelID"]',  # Old Beacon interface
+                    'input[type="search"]'  # Generic search input
+                ]
+                
+                for selector in search_selectors:
+                    try:
+                        page.wait_for_selector(selector, state="visible", timeout=5000)
+                        print(f"Search input found: {selector}")
+                        search_input_found = True
+                        break
+                    except:
+                        continue
+                
+                if not search_input_found:
+                    print(f"ERROR: Search input not found with any selector")
                     print(f"Current URL: {page.url}")
                     print(f"Page title: {page.title()}")
                     # Save screenshot for debugging
@@ -372,13 +386,25 @@ class BeaconScraper(BaseScraper):
                           document_number, deed_code, prc_url
         """
         try:
-            # Find search input using flexible selector with explicit wait
-            search_input = page.locator('input[id*="txtParcelID"]').first
+            # Find search input using flexible selectors (Beacon has different versions)
+            search_selectors = [
+                'input#topSearchControl',  # New Beacon interface
+                'input[id*="txtParcelID"]',  # Old Beacon interface
+                'input[type="search"]'  # Generic search input
+            ]
             
-            # Wait for it to be ready
-            try:
-                search_input.wait_for(state="visible", timeout=10000)
-            except Exception as e:
+            search_input = None
+            for selector in search_selectors:
+                try:
+                    temp_input = page.locator(selector).first
+                    if temp_input.is_visible(timeout=2000):
+                        search_input = temp_input
+                        print(f"  Using search input: {selector}")
+                        break
+                except:
+                    continue
+            
+            if not search_input:
                 print(f"ERROR: Cannot find search input for parcel {parcel_id}")
                 print(f"Current URL: {page.url}")
                 print(f"Expected search URL: {search_url}")
@@ -387,9 +413,18 @@ class BeaconScraper(BaseScraper):
                     print("WARNING: Not on search page! Navigating...")
                     page.goto(search_url, wait_until="domcontentloaded")
                     page.wait_for_timeout(3000)
-                    search_input.wait_for(state="visible", timeout=10000)
-                else:
-                    raise e
+                    # Try again
+                    for selector in search_selectors:
+                        try:
+                            temp_input = page.locator(selector).first
+                            if temp_input.is_visible(timeout=2000):
+                                search_input = temp_input
+                                break
+                        except:
+                            continue
+                
+                if not search_input:
+                    raise Exception("Search input not found with any selector")
             
             # Clear and fill search box
             search_input.clear(timeout=5000)

@@ -20,13 +20,15 @@ def detect_platform(url: str) -> str:
     url_lower = url.lower()
     
     if "wthgis.com" in url_lower:
-        return "wthgis"
+        return "thinkgis"
     elif "beacon.schneidercorp.com" in url_lower:
         return "beacon"
     elif "elevatemaps.io" in url_lower:
         return "elevate"
     elif "portico.mygisonline.com" in url_lower or "mygisonline.com" in url_lower:
         return "portico"
+    elif "arcgis.com" in url_lower or "arcgis" in url_lower:
+        return "arcgis"
     else:
         return "unknown"
 
