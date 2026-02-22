@@ -430,8 +430,8 @@ class BeaconScraper(BaseScraper):
             search_input.clear(timeout=5000)
             search_input.fill(parcel_id, timeout=5000)
             
-            # Wait for autocomplete dropdown to appear
-            page.wait_for_timeout(2000)
+            # Wait for autocomplete dropdown to appear (give it more time)
+            page.wait_for_timeout(3000)
             
             # Look for autocomplete results (Twitter Typeahead)
             # The dropdown shows matching parcels - we need to click on one
@@ -439,20 +439,24 @@ class BeaconScraper(BaseScraper):
                 # Try to find the dropdown suggestion that matches our parcel
                 # Typeahead creates suggestions with class 'tt-suggestion'
                 suggestion = page.locator(f'.tt-suggestion:has-text("{parcel_id}")').first
-                if suggestion.is_visible(timeout=3000):
-                    print(f"  ✓ Found autocomplete suggestion, clicking...")
-                    suggestion.click()
-                    page.wait_for_timeout(3000)
-                else:
-                    # No dropdown, try pressing Enter
-                    print(f"  No autocomplete dropdown visible, pressing Enter...")
-                    search_input.press('Enter')
-                    page.wait_for_timeout(3000)
+                
+                # Wait for it to be visible with a reasonable timeout
+                suggestion.wait_for(state="visible", timeout=5000)
+                print(f"  ✓ Found autocomplete suggestion, clicking...")
+                suggestion.click()
+                
+                # Wait for navigation to property page (PageTypeID=4)
+                page.wait_for_timeout(5000)
+                
+                # Check if we navigated to property details page
+                if "PageTypeID=4" not in page.url:
+                    print(f"  Warning: Expected PageTypeID=4, got: {page.url}")
+                    
             except Exception as e:
-                # Fallback: just press Enter
-                print(f"  Autocomplete error ({str(e)[:50]}), pressing Enter...")
-                search_input.press('Enter')
-                page.wait_for_timeout(3000)
+                # Autocomplete didn't work - parcel might not exist
+                print(f"  ✗ Autocomplete failed: {str(e)[:100]}")
+                page.goto(search_url)
+                return None
             
             # Check if we got results or "no results" message
             # Beacon shows property details if found, or stays on search page if not
