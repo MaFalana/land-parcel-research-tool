@@ -213,7 +213,7 @@ class LabelExporter:
         # Extract formatted parcel IDs from shapefile
         gdf["PARCELID_JOIN"] = gdf[parcel_col_shp].apply(extract_parcel_id)
         
-        # Find parcel ID column in Excel
+        # Find parcel ID column in Excel - try both Parcel ID and Alternate ID
         parcel_col_excel = None
         for col in df.columns:
             if 'parcel' in str(col).lower() and 'id' in str(col).lower():
@@ -239,8 +239,16 @@ class LabelExporter:
         matches = excel_ids.intersection(shape_ids)
         print(f"\nMatching PARCELIDs: {len(matches)}")
         
+        # If no matches, try using Alternate ID column
+        if len(matches) == 0 and "Alternate ID" in df.columns:
+            print("No matches with Parcel ID, trying Alternate ID column...")
+            df["PARCELID_JOIN"] = df["Alternate ID"].astype(str).str.strip()
+            excel_ids = set(df["PARCELID_JOIN"])
+            matches = excel_ids.intersection(shape_ids)
+            print(f"Matching with Alternate ID: {len(matches)}")
+        
         if len(matches) == 0:
-            raise ValueError("No matching parcel IDs found between Excel and shapefile")
+            raise ValueError("No matching parcel IDs found between Excel and shapefile. Tried both Parcel ID and Alternate ID columns.")
         
         # Join
         print("Joining data...")

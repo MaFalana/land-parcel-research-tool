@@ -427,6 +427,7 @@ class BeaconScraper(BaseScraper):
             
             # Look for autocomplete results (Twitter Typeahead)
             # The dropdown shows matching parcels - we need to click on one
+            autocomplete_success = False
             try:
                 # Try to find the dropdown suggestion that matches our parcel
                 # Typeahead creates suggestions with class 'tt-suggestion'
@@ -452,6 +453,7 @@ class BeaconScraper(BaseScraper):
                 if suggestion:
                     print(f"  ✓ Found autocomplete suggestion, clicking...")
                     suggestion.click()
+                    autocomplete_success = True
                     
                     # Wait for navigation to property page (PageTypeID=4)
                     page.wait_for_timeout(5000)
@@ -463,8 +465,26 @@ class BeaconScraper(BaseScraper):
                     raise Exception("No autocomplete suggestions found")
                     
             except Exception as e:
-                # Autocomplete didn't work - parcel might not exist
-                print(f"  ✗ Autocomplete failed: {str(e)[:100]}")
+                print(f"  ⚠ Autocomplete failed: {str(e)[:100]}")
+                autocomplete_success = False
+            
+            # If autocomplete failed, try pressing Enter to submit search
+            if not autocomplete_success:
+                print(f"  Trying direct search submission...")
+                try:
+                    search_input.press("Enter")
+                    page.wait_for_timeout(5000)
+                    
+                    # Check if we got to a property page
+                    if "PageTypeID=4" in page.url:
+                        print(f"  ✓ Direct search successful")
+                        autocomplete_success = True
+                except Exception as e:
+                    print(f"  ✗ Direct search failed: {str(e)[:100]}")
+            
+            # If still no success, give up
+            if not autocomplete_success:
+                print(f"  ✗ Could not find parcel {parcel_id}")
                 page.goto(search_url)
                 return None
             
