@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MdClose, MdDownload, MdCancel, MdDelete, MdRefresh } from 'react-icons/md';
+import { useState, useEffect } from 'react';
+import { MdClose, MdDownload, MdCancel, MdDelete, MdRefresh, MdReplay } from 'react-icons/md';
 import './job-detail-modal.css';
 
 /**
@@ -121,6 +121,43 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
       onClose(); // Close modal after successful delete
     } catch (err) {
       alert(`Delete failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!confirm('Retry this job with the same configuration?')) return;
+
+    setActionLoading(true);
+    try {
+      const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      
+      // Create a new job with the same parameters
+      const formData = new FormData();
+      formData.append('county', job.county);
+      formData.append('crs_id', job.crs_id);
+      
+      // Download the original parcel file and re-upload
+      const parcelResponse = await fetch(job.azure_parcel_path);
+      const parcelBlob = await parcelResponse.blob();
+      formData.append('parcel_file', parcelBlob, 'parcels.txt');
+      
+      const response = await fetch(`${apiBaseUrl}/jobs/create`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to retry job');
+      }
+
+      const newJob = await response.json();
+      alert(`New job created: ${newJob.id}`);
+      onClose(); // Close modal
+      window.location.reload(); // Refresh to show new job
+    } catch (err) {
+      alert(`Retry failed: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -272,7 +309,28 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
             </button>
           )}
 
-          {job && (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
+          {job && (job.status === 'failed' || job.status === 'cancelled') && (
+            <>
+              <button
+                className="job-modal-btn job-modal-btn-primary"
+                onClick={handleRetry}
+                disabled={actionLoading}
+              >
+                <MdReplay />
+                Retry Job
+              </button>
+              <button
+                className="job-modal-btn job-modal-btn-danger"
+                onClick={handleDelete}
+                disabled={actionLoading}
+              >
+                <MdDelete />
+                Delete Job
+              </button>
+            </>
+          )}
+
+          {job && job.status === 'completed' && (
             <button
               className="job-modal-btn job-modal-btn-danger"
               onClick={handleDelete}

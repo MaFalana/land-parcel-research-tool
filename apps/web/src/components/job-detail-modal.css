@@ -249,6 +249,15 @@
   background: #e2e8f0;
 }
 
+.job-modal-btn-primary {
+  background: var(--hwc-red, #EE2F27);
+  color: white;
+}
+
+.job-modal-btn-primary:hover:not(:disabled) {
+  background: #d42820;
+}
+
 .job-modal-btn-warning {
   background: #fbbf24;
   color: #78350f;
