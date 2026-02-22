@@ -458,9 +458,14 @@ class BeaconScraper(BaseScraper):
                     # Wait for navigation to property page (PageTypeID=4)
                     page.wait_for_timeout(5000)
                     
+                    # Debug: Check current URL
+                    current_url = page.url
+                    print(f"  Current URL after click: {current_url}")
+                    
                     # Check if we navigated to property details page
-                    if "PageTypeID=4" not in page.url:
-                        print(f"  Warning: Expected PageTypeID=4, got: {page.url}")
+                    if "PageTypeID=4" not in current_url:
+                        print(f"  Warning: Expected PageTypeID=4, got: {current_url}")
+                        autocomplete_success = False
                 else:
                     raise Exception("No autocomplete suggestions found")
                     
@@ -490,13 +495,51 @@ class BeaconScraper(BaseScraper):
             
             # Check if we got results or "no results" message
             # Beacon shows property details if found, or stays on search page if not
+            property_found = False
             try:
                 # Try to find legal description (indicates we found the parcel)
-                legal_desc_elem = page.locator('span[id*="lblLegalDescription"]').first
+                legal_desc_elem = page.locator('span[id*="lblLegalDescription"], span[id*="LegalDescription"]').first
                 legal_desc_elem.wait_for(timeout=3000)
+                print(f"  ✓ Found legal description element")
+                property_found = True
             except:
-                # Legal description not found = parcel not found
-                print(f"Parcel {parcel_id} not found in Beacon")
+                # Legal description not found - try alternate indicators
+                print(f"  ⚠ Legal description element not found, checking for other property indicators...")
+                try:
+                    # Try to find owner name element as alternate indicator
+                    owner_elem = page.locator('a[id*="lnkOwnerName"], a[id*="OwnerName"], span[id*="lblOwner"], span[id*="Owner"]').first
+                    owner_elem.wait_for(timeout=3000)
+                    print(f"  ✓ Found owner element instead")
+                    property_found = True
+                except:
+                    # Try to find parcel ID element
+                    try:
+                        parcel_elem = page.locator('span[id*="lblParcelID"], span[id*="lblParcel"], span[id*="ParcelID"]').first
+                        parcel_elem.wait_for(timeout=3000)
+                        print(f"  ✓ Found parcel ID element")
+                        property_found = True
+                    except:
+                        pass
+            
+            if not property_found:
+                # No property indicators found = parcel not found
+                print(f"  ✗ Parcel {parcel_id} not found in Beacon (no property indicators)")
+                print(f"  Current URL: {page.url}")
+                
+                # Debug: Save screenshot and HTML
+                try:
+                    screenshot_path = os.path.join(tempfile.gettempdir(), f"beacon_debug_{parcel_id.replace('/', '_').replace('.', '_')}.png")
+                    page.screenshot(path=screenshot_path)
+                    print(f"  Debug screenshot saved: {screenshot_path}")
+                    
+                    # Also save HTML for inspection
+                    html_path = os.path.join(tempfile.gettempdir(), f"beacon_debug_{parcel_id.replace('/', '_').replace('.', '_')}.html")
+                    with open(html_path, 'w', encoding='utf-8') as f:
+                        f.write(page.content())
+                    print(f"  Debug HTML saved: {html_path}")
+                except:
+                    pass
+                
                 page.goto(search_url)  # Go back to search page
                 return None
             
