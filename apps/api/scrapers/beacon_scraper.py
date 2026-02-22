@@ -707,15 +707,20 @@ class BeaconScraper(BaseScraper):
                             base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
                             prc_href = base_domain + '/' + prc_href
                         
-                        data['prc_url'] = prc_href
-                        if latest_year > 0:
-                            print(f"  Found PRC URL: {latest_year} Property Record Card")
+                        # Check if this is actually a property page URL (not a PDF)
+                        if 'PageTypeID=4' in prc_href or 'Application.aspx' in prc_href:
+                            print(f"  ⚠ PRC link points to property page, not PDF - skipping")
+                            data['prc_url'] = None
                         else:
-                            print(f"  Found PRC URL: {prc_href[:80]}...")
+                            data['prc_url'] = prc_href
+                            if latest_year > 0:
+                                print(f"  Found PRC URL: {latest_year} Property Record Card")
+                            else:
+                                print(f"  Found PRC URL: {prc_href[:80]}...")
                     else:
                         data['prc_url'] = None
                 else:
-                    # Fallback: try generic PDF links
+                    # Fallback: try generic PDF links (but not property page links)
                     pdf_links = page.locator('a[href*=".pdf"]').all()
                     if pdf_links:
                         prc_href = pdf_links[0].get_attribute('href')
@@ -725,8 +730,13 @@ class BeaconScraper(BaseScraper):
                         elif not prc_href.startswith('http'):
                             base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
                             prc_href = base_domain + '/' + prc_href
-                        data['prc_url'] = prc_href
-                        print(f"  Found PDF URL: {prc_href[:80]}...")
+                        
+                        # Check if this is actually a PDF
+                        if '.pdf' in prc_href.lower() and 'PageTypeID' not in prc_href:
+                            data['prc_url'] = prc_href
+                            print(f"  Found PDF URL: {prc_href[:80]}...")
+                        else:
+                            data['prc_url'] = None
                     else:
                         data['prc_url'] = None
             except Exception as e:
