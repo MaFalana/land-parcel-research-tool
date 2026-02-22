@@ -429,10 +429,30 @@ class BeaconScraper(BaseScraper):
             # Clear and fill search box
             search_input.clear(timeout=5000)
             search_input.fill(parcel_id, timeout=5000)
-            search_input.press('Enter')
             
-            # Wait for results to load (don't use networkidle - Beacon has background activity)
-            page.wait_for_timeout(3000)
+            # Wait for autocomplete dropdown to appear
+            page.wait_for_timeout(2000)
+            
+            # Look for autocomplete results (Twitter Typeahead)
+            # The dropdown shows matching parcels - we need to click on one
+            try:
+                # Try to find the dropdown suggestion that matches our parcel
+                # Typeahead creates suggestions with class 'tt-suggestion'
+                suggestion = page.locator(f'.tt-suggestion:has-text("{parcel_id}")').first
+                if suggestion.is_visible(timeout=3000):
+                    print(f"  ✓ Found autocomplete suggestion, clicking...")
+                    suggestion.click()
+                    page.wait_for_timeout(3000)
+                else:
+                    # No dropdown, try pressing Enter
+                    print(f"  No autocomplete dropdown visible, pressing Enter...")
+                    search_input.press('Enter')
+                    page.wait_for_timeout(3000)
+            except Exception as e:
+                # Fallback: just press Enter
+                print(f"  Autocomplete error ({str(e)[:50]}), pressing Enter...")
+                search_input.press('Enter')
+                page.wait_for_timeout(3000)
             
             # Check if we got results or "no results" message
             # Beacon shows property details if found, or stays on search page if not
