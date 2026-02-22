@@ -57,14 +57,6 @@ class BeaconScraper(BaseScraper):
         Returns:
             Dict with excel_path and stats
         """
-        # IMMEDIATE DEBUG
-        print("=" * 60)
-        print("SCRAPER STARTED")
-        print(f"Parcel file: {parcel_file_path}")
-        print(f"Base URL: {base_url}")
-        print(f"County: {county}")
-        print("=" * 60)
-        
         # Parse parcel IDs
         parcel_ids = self.read_parcel_ids(parcel_file_path)
         total_parcels = len(parcel_ids)
@@ -80,7 +72,6 @@ class BeaconScraper(BaseScraper):
         
         # Build search page URL (always use PageTypeID=2 for search)
         # Extract base domain from URL
-        from urllib.parse import urlparse
         parsed = urlparse(base_url)
         search_url = f"{parsed.scheme}://{parsed.netloc}/Application.aspx?AppID={url_params['app_id']}&LayerID={url_params['layer_id']}&PageTypeID=2&PageID={url_params['page_id']}"
         print(f"Using search URL: {search_url}")
@@ -475,9 +466,32 @@ class BeaconScraper(BaseScraper):
             
             # Owner name (from page title or owner section)
             try:
-                owner_elem = page.locator('span[id*="lblOwner"], span[id*="lblOwnerName"]').first
-                data['owner_name'] = owner_elem.inner_text(timeout=2000).strip()
-            except:
+                # Try multiple selectors for owner name
+                owner_selectors = [
+                    'a[id*="lnkOwnerName"]',  # Link with owner name (most common in Beacon)
+                    'span[id*="lblOwnerName"]',
+                    'span[id*="lblOwner"]',
+                    'span[id*="Owner1"]',
+                    'td:has-text("Owner") + td span',
+                    'th:has-text("Owner") + td span'
+                ]
+                
+                owner_text = ''
+                for selector in owner_selectors:
+                    try:
+                        elem = page.locator(selector).first
+                        text = elem.inner_text(timeout=1000).strip()
+                        if text and len(text) > 0:
+                            # Make sure it's not an address (addresses usually have numbers at start)
+                            # Owner names typically start with letters
+                            if not text[0].isdigit():
+                                owner_text = text
+                                break
+                    except:
+                        continue
+                
+                data['owner_name'] = owner_text
+            except Exception as e:
                 data['owner_name'] = ''
             
             # Owner address (mailing address)
@@ -559,27 +573,65 @@ class BeaconScraper(BaseScraper):
                 data['deed_code'] = ''
             
             # Extract PRC (Property Record Card) URL
-            # Look for the most recent PRC link - usually in a "Files" or "Documents" section
+            # Look for the most recent PRC link - there may be multiple years
             try:
-                # Try to find PRC links - they usually have "PropertyRecordCard" or similar in the href
-                prc_links = page.locator('a[href*="PropertyRecordCard"], a[href*="RecordCard"], a[href*=".pdf"]').all()
+                # Try to find PRC links - they usually have "Property Record Card" in the text
+                prc_links = page.locator('a:has-text("Property Record Card")').all()
                 
                 if prc_links:
-                    # Get the first (most recent) PRC link
-                    prc_href = prc_links[0].get_attribute('href')
+                    # If multiple PRCs, find the one with the most recent year
+                    latest_prc = None
+                    latest_year = 0
                     
-                    # Make absolute URL if relative
-                    if prc_href.startswith('/'):
-                        base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
-                        prc_href = base_domain + prc_href
-                    elif not prc_href.startswith('http'):
-                        base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
-                        prc_href = base_domain + '/' + prc_href
+                    for link in prc_links:
+                        try:
+                            link_text = link.inner_text()
+                            # Extract year from text like "2024 Property Record Card (PDF)"
+                            year_match = re.search(r'(\d{4})', link_text)
+                            if year_match:
+                                year = int(year_match.group(1))
+                                if year > latest_year:
+                                    latest_year = year
+                                    latest_prc = link
+                            elif not latest_prc:
+                                # If no year found, use this as fallback
+                                latest_prc = link
+                        except:
+                            continue
                     
-                    data['prc_url'] = prc_href
-                    print(f"  Found PRC URL: {prc_href}")
+                    if latest_prc:
+                        prc_href = latest_prc.get_attribute('href')
+                        
+                        # Make absolute URL if relative
+                        if prc_href.startswith('/'):
+                            base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
+                            prc_href = base_domain + prc_href
+                        elif not prc_href.startswith('http'):
+                            base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
+                            prc_href = base_domain + '/' + prc_href
+                        
+                        data['prc_url'] = prc_href
+                        if latest_year > 0:
+                            print(f"  Found PRC URL: {latest_year} Property Record Card")
+                        else:
+                            print(f"  Found PRC URL: {prc_href[:80]}...")
+                    else:
+                        data['prc_url'] = None
                 else:
-                    data['prc_url'] = None
+                    # Fallback: try generic PDF links
+                    pdf_links = page.locator('a[href*=".pdf"]').all()
+                    if pdf_links:
+                        prc_href = pdf_links[0].get_attribute('href')
+                        if prc_href.startswith('/'):
+                            base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
+                            prc_href = base_domain + prc_href
+                        elif not prc_href.startswith('http'):
+                            base_domain = f"{urlparse(search_url).scheme}://{urlparse(search_url).netloc}"
+                            prc_href = base_domain + '/' + prc_href
+                        data['prc_url'] = prc_href
+                        print(f"  Found PDF URL: {prc_href[:80]}...")
+                    else:
+                        data['prc_url'] = None
             except Exception as e:
                 print(f"Could not find PRC URL: {e}")
                 data['prc_url'] = None
