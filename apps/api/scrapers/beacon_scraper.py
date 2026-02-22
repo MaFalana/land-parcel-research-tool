@@ -210,19 +210,20 @@ class BeaconScraper(BaseScraper):
                         if parcel_data:
                             # Write to Excel
                             ws.cell(row_num, 1, parcel_id)  # Column A: Parcel ID
-                            ws.cell(row_num, 2, parcel_data.get('owner_name', ''))  # Column B: Owner Name
-                            ws.cell(row_num, 3, parcel_data.get('owner_address', ''))  # Column C: Owner Address
-                            ws.cell(row_num, 4, parcel_data.get('owner_city', ''))  # Column D: Owner City
-                            ws.cell(row_num, 5, parcel_data.get('owner_state', ''))  # Column E: Owner State
-                            ws.cell(row_num, 6, parcel_data.get('owner_zip', ''))  # Column F: Owner Zip
-                            ws.cell(row_num, 7, parcel_data.get('parcel_address', ''))  # Column G: Parcel Address
-                            ws.cell(row_num, 8, parcel_data.get('parcel_city', ''))  # Column H: Parcel City
-                            ws.cell(row_num, 9, parcel_data.get('parcel_state', ''))  # Column I: Parcel State
-                            ws.cell(row_num, 10, parcel_data.get('parcel_zip', ''))  # Column J: Parcel Zip
-                            ws.cell(row_num, 11, parcel_data.get('legal_description', ''))  # Column K: Legal Desc
-                            ws.cell(row_num, 12, parcel_data.get('latest_deed_date', ''))  # Column L: Deed Date
-                            ws.cell(row_num, 13, parcel_data.get('document_number', ''))  # Column M: Doc #
-                            ws.cell(row_num, 14, parcel_data.get('deed_code', ''))  # Column N: Deed Type
+                            ws.cell(row_num, 2, parcel_data.get('alternate_id', ''))  # Column B: Alternate ID
+                            ws.cell(row_num, 3, parcel_data.get('owner_name', ''))  # Column C: Owner Name
+                            ws.cell(row_num, 4, parcel_data.get('owner_address', ''))  # Column D: Owner Address
+                            ws.cell(row_num, 5, parcel_data.get('owner_city', ''))  # Column E: Owner City
+                            ws.cell(row_num, 6, parcel_data.get('owner_state', ''))  # Column F: Owner State
+                            ws.cell(row_num, 7, parcel_data.get('owner_zip', ''))  # Column G: Owner Zip
+                            ws.cell(row_num, 8, parcel_data.get('parcel_address', ''))  # Column H: Parcel Address
+                            ws.cell(row_num, 9, parcel_data.get('parcel_city', ''))  # Column I: Parcel City
+                            ws.cell(row_num, 10, parcel_data.get('parcel_state', ''))  # Column J: Parcel State
+                            ws.cell(row_num, 11, parcel_data.get('parcel_zip', ''))  # Column K: Parcel Zip
+                            ws.cell(row_num, 12, parcel_data.get('legal_description', ''))  # Column L: Legal Desc
+                            ws.cell(row_num, 13, parcel_data.get('latest_deed_date', ''))  # Column M: Deed Date
+                            ws.cell(row_num, 14, parcel_data.get('document_number', ''))  # Column N: Doc #
+                            ws.cell(row_num, 15, parcel_data.get('deed_code', ''))  # Column O: Deed Type
                             
                             # Download PRC PDF if available
                             prc_path = ''
@@ -243,14 +244,14 @@ class BeaconScraper(BaseScraper):
                                     traceback.print_exc()
                                     prc_path = f"ERROR: {str(e)[:50]}"
                             
-                            ws.cell(row_num, 15, prc_path)  # Column O: Report Card Path
-                            ws.cell(row_num, 16, 'SUCCESS')  # Column P: Status
+                            ws.cell(row_num, 16, prc_path)  # Column P: Report Card Path
+                            ws.cell(row_num, 17, 'SUCCESS')  # Column Q: Status
                             
                             processed += 1
                         else:
                             # Parcel not found
                             ws.cell(row_num, 1, parcel_id)
-                            ws.cell(row_num, 16, 'NOT_FOUND')
+                            ws.cell(row_num, 17, 'NOT_FOUND')
                             failed += 1
                         
                         # Save progress every 10 parcels
@@ -277,7 +278,7 @@ class BeaconScraper(BaseScraper):
                         import traceback
                         traceback.print_exc()
                         ws.cell(row_num, 1, parcel_id)
-                        ws.cell(row_num, 16, f'ERROR: {str(e)[:50]}')
+                        ws.cell(row_num, 17, f'ERROR: {str(e)[:50]}')
                         failed += 1
                         continue
                 
@@ -429,19 +430,37 @@ class BeaconScraper(BaseScraper):
             try:
                 # Try to find the dropdown suggestion that matches our parcel
                 # Typeahead creates suggestions with class 'tt-suggestion'
-                suggestion = page.locator(f'.tt-suggestion:has-text("{parcel_id}")').first
+                # Try exact match first, then partial match
+                suggestion = None
                 
-                # Wait for it to be visible with a reasonable timeout
-                suggestion.wait_for(state="visible", timeout=5000)
-                print(f"  ✓ Found autocomplete suggestion, clicking...")
-                suggestion.click()
+                # Try exact match
+                try:
+                    suggestion = page.locator(f'.tt-suggestion:has-text("{parcel_id}")').first
+                    suggestion.wait_for(state="visible", timeout=3000)
+                except:
+                    # Try partial match - look for any suggestion containing part of the parcel ID
+                    try:
+                        # Get all suggestions
+                        suggestions = page.locator('.tt-suggestion').all()
+                        if suggestions:
+                            # Click the first one (most relevant)
+                            suggestion = suggestions[0]
+                            print(f"  ⚠ Using first autocomplete suggestion (partial match)")
+                    except:
+                        pass
                 
-                # Wait for navigation to property page (PageTypeID=4)
-                page.wait_for_timeout(5000)
-                
-                # Check if we navigated to property details page
-                if "PageTypeID=4" not in page.url:
-                    print(f"  Warning: Expected PageTypeID=4, got: {page.url}")
+                if suggestion:
+                    print(f"  ✓ Found autocomplete suggestion, clicking...")
+                    suggestion.click()
+                    
+                    # Wait for navigation to property page (PageTypeID=4)
+                    page.wait_for_timeout(5000)
+                    
+                    # Check if we navigated to property details page
+                    if "PageTypeID=4" not in page.url:
+                        print(f"  Warning: Expected PageTypeID=4, got: {page.url}")
+                else:
+                    raise Exception("No autocomplete suggestions found")
                     
             except Exception as e:
                 # Autocomplete didn't work - parcel might not exist
@@ -463,6 +482,21 @@ class BeaconScraper(BaseScraper):
             
             # Extract data
             data = {}
+            
+            # Extract Parcel ID and Alternate ID (some counties use different formats)
+            try:
+                # Try to find parcel ID on the page
+                parcel_id_elem = page.locator('span[id*="lblParcelID"], span[id*="lblParcel"]').first
+                data['parcel_id_display'] = parcel_id_elem.inner_text(timeout=2000).strip()
+            except:
+                data['parcel_id_display'] = parcel_id
+            
+            try:
+                # Try to find alternate ID
+                alt_id_elem = page.locator('span[id*="lblAlternateID"], span[id*="lblAltID"], span[id*="AlternateID"]').first
+                data['alternate_id'] = alt_id_elem.inner_text(timeout=2000).strip()
+            except:
+                data['alternate_id'] = ''
             
             # Owner name (from page title or owner section)
             try:
@@ -663,6 +697,7 @@ class BeaconScraper(BaseScraper):
         # Header row (row 1)
         headers = [
             'Parcel ID',
+            'Alternate ID',
             'Owner Name',
             'Owner Address',
             'Owner City',
@@ -693,21 +728,22 @@ class BeaconScraper(BaseScraper):
         
         # Set column widths
         ws.column_dimensions['A'].width = 20  # Parcel ID
-        ws.column_dimensions['B'].width = 30  # Owner Name
-        ws.column_dimensions['C'].width = 30  # Owner Address
-        ws.column_dimensions['D'].width = 20  # Owner City
-        ws.column_dimensions['E'].width = 8   # Owner State
-        ws.column_dimensions['F'].width = 12  # Owner Zip
-        ws.column_dimensions['G'].width = 30  # Parcel Address
-        ws.column_dimensions['H'].width = 20  # Parcel City
-        ws.column_dimensions['I'].width = 8   # Parcel State
-        ws.column_dimensions['J'].width = 12  # Parcel Zip
-        ws.column_dimensions['K'].width = 50  # Legal Description
-        ws.column_dimensions['L'].width = 15  # Deed Date
-        ws.column_dimensions['M'].width = 20  # Document Number
-        ws.column_dimensions['N'].width = 12  # Deed Type
-        ws.column_dimensions['O'].width = 50  # Report Card Path
-        ws.column_dimensions['P'].width = 15  # Status
+        ws.column_dimensions['B'].width = 25  # Alternate ID
+        ws.column_dimensions['C'].width = 30  # Owner Name
+        ws.column_dimensions['D'].width = 30  # Owner Address
+        ws.column_dimensions['E'].width = 20  # Owner City
+        ws.column_dimensions['F'].width = 8   # Owner State
+        ws.column_dimensions['G'].width = 12  # Owner Zip
+        ws.column_dimensions['H'].width = 30  # Parcel Address
+        ws.column_dimensions['I'].width = 20  # Parcel City
+        ws.column_dimensions['J'].width = 8   # Parcel State
+        ws.column_dimensions['K'].width = 12  # Parcel Zip
+        ws.column_dimensions['L'].width = 50  # Legal Description
+        ws.column_dimensions['M'].width = 15  # Deed Date
+        ws.column_dimensions['N'].width = 20  # Document Number
+        ws.column_dimensions['O'].width = 12  # Deed Type
+        ws.column_dimensions['P'].width = 50  # Report Card Path
+        ws.column_dimensions['Q'].width = 15  # Status
         
         # Freeze header row
         ws.freeze_panes = 'A2'

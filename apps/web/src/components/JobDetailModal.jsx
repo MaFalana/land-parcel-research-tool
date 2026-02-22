@@ -133,30 +133,21 @@ export function JobDetailModal({ isOpen, onClose, jobId }) {
     try {
       const apiBaseUrl = import.meta.env.PUBLIC_API_BASE_URL || 'http://localhost:8000';
       
-      // Create a new job with the same parameters
-      const formData = new FormData();
-      formData.append('county', job.county);
-      formData.append('crs_id', job.crs_id);
-      
-      // Download the original parcel file and re-upload
-      const parcelResponse = await fetch(job.azure_parcel_path);
-      const parcelBlob = await parcelResponse.blob();
-      formData.append('parcel_file', parcelBlob, 'parcels.txt');
-      
-      const response = await fetch(`${apiBaseUrl}/jobs/create`, {
+      const response = await fetch(`${apiBaseUrl}/jobs/${jobId}/retry`, {
         method: 'POST',
-        body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('Failed to retry job');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to retry job');
       }
 
-      const newJob = await response.json();
-      alert(`New job created: ${newJob.id}`);
+      const result = await response.json();
+      alert(`New job created: ${result.job_id}`);
       onClose(); // Close modal
       window.location.reload(); // Refresh to show new job
     } catch (err) {
+      console.error('Retry error:', err);
       alert(`Retry failed: ${err.message}`);
     } finally {
       setActionLoading(false);

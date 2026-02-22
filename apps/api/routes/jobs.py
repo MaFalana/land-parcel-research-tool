@@ -498,6 +498,99 @@ async def cancel_job(job_id: str, user: Optional[dict] = Depends(get_current_use
     }
 
 
+@jobs_router.post("/{job_id}/retry")
+async def retry_job(job_id: str, user: Optional[dict] = Depends(get_current_user)):
+    """
+    Retry a failed or cancelled job
+    
+    Creates a new job with the same configuration by downloading the original files from Azure
+    Users can only retry their own jobs
+    """
+    job_data = DB.parcelJobsCollection.find_one({"_id": job_id})
+    
+    if not job_data:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Verify user owns this job (if authenticated)
+    if user and user.get("user_id"):
+        if job_data.get("user_id") != user["user_id"]:
+            raise HTTPException(status_code=403, detail="Access denied: You can only retry your own jobs")
+    
+    job = ParcelJob(**job_data)
+    
+    if job.status not in ["failed", "cancelled"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot retry job with status: {job.status}. Only failed or cancelled jobs can be retried."
+        )
+    
+    # Create new job ID
+    new_job_id = str(uuid.uuid4())
+    
+    # Create temporary directory for new job
+    temp_dir = os.path.join(tempfile.gettempdir(), "parcel_jobs", new_job_id)
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        # Download original parcel file from Azure
+        parcel_ext = job.azure_parcel_path.split('.')[-1]
+        parcel_local_path = os.path.join(temp_dir, f"parcels.{parcel_ext}")
+        DB.az.download_file(job.azure_parcel_path, parcel_local_path)
+        
+        # Download shapefile from Azure
+        shapefile_local_path = os.path.join(temp_dir, "shapefiles.zip")
+        DB.az.download_file(job.azure_shapefile_path, shapefile_local_path)
+        
+        # Upload files to new job location in Azure
+        new_azure_parcel_path = f"jobs/{new_job_id}/parcels.{parcel_ext}"
+        new_azure_shapefile_path = f"jobs/{new_job_id}/shapefiles.zip"
+        
+        DB.az.upload_file(parcel_local_path, new_azure_parcel_path)
+        DB.az.upload_file(shapefile_local_path, new_azure_shapefile_path)
+        
+        # Create new job with same configuration
+        new_job = ParcelJob(
+            id=new_job_id,
+            user_id=job.user_id,
+            user_email=job.user_email,
+            user_name=job.user_name,
+            county=job.county,
+            crs_id=job.crs_id,
+            gis_url=job.gis_url,
+            platform=job.platform,
+            parcel_file_path=parcel_local_path,
+            shapefile_zip_path=shapefile_local_path,
+            azure_parcel_path=new_azure_parcel_path,
+            azure_shapefile_path=new_azure_shapefile_path,
+            status="pending",
+            parcel_count=job.parcel_count,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        DB.parcelJobsCollection.insert_one(new_job._to_dict())
+        
+        return {
+            "job_id": new_job_id,
+            "original_job_id": job_id,
+            "status": "pending",
+            "message": f"Retry job created for {job.parcel_count} parcels in {job.county} county",
+            "platform": job.platform,
+            "parcel_count": job.parcel_count,
+            "created_at": new_job.created_at
+        }
+        
+    except Exception as e:
+        # Clean up on error
+        import shutil
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retry job: {str(e)}"
+        )
+
+
 @jobs_router.get("/health")
 async def health_check():
     """
