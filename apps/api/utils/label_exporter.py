@@ -27,12 +27,24 @@ def extract_parcel_id(idparcel: str) -> str:
     The IDPARCEL has extra digits at the start, we need to extract the part that matches Excel format
     Format in Excel: 28-08-22-442-023.000-025
     Format in IDPARCEL: 1400816928-08-22-442-023.000-025 (starts with extra digits before the dash)
+    
+    If the ID is already in the correct format, return as-is.
     """
     idparcel_str = str(idparcel).strip()
+    
+    # Handle NaN or empty values
+    if idparcel_str.lower() in ['nan', 'none', '']:
+        return idparcel_str
+    
+    # Check if already in correct format (starts with XX-XX-XX pattern)
+    if re.match(r'^\d{2}-\d{2}-\d{2}-', idparcel_str):
+        return idparcel_str
+    
     # Find the first occurrence of pattern like "28-08-22-" (2 digits, dash, 2 digits, dash, 2 digits, dash)
     match = re.search(r'\d{2}-\d{2}-\d{2}-', idparcel_str)
     if match:
         return idparcel_str[match.start():]
+    
     return idparcel_str
 
 
@@ -199,21 +211,103 @@ class LabelExporter:
         
         # Normalize parcel IDs for joining
         # Find the parcel ID column in shapefile
-        parcel_col_shp = None
+        
+        # Debug: Show all available columns and their sample values FIRST
+        print(f"\n=== SHAPEFILE COLUMN ANALYSIS ===")
+        print(f"Total columns: {len(gdf.columns)}")
         for col in gdf.columns:
-            if 'parcel' in col.lower() or 'idparcel' in col.lower():
-                parcel_col_shp = col
-                break
+            non_null_count = gdf[col].notna().sum()
+            if non_null_count > 0:  # Only show columns with data
+                sample_vals = gdf[col].head(3).tolist()
+                print(f"  {col}: {non_null_count}/{len(gdf)} non-null, samples: {sample_vals}")
+        print(f"=== END COLUMN ANALYSIS ===\n")
+        
+        parcel_col_shp = None
+        
+        # Priority order for shapefile columns
+        # For Hamilton County, LOCAL_ID has the numeric format that matches
+        priority_columns = ['LOCAL_ID', 'PARCEL_ID', 'STATE_PARC', 'IDPARCEL', 'PIN']
+        
+        for priority_col in priority_columns:
+            if priority_col in gdf.columns:
+                # Check if this column has actual data (not all NaN)
+                non_null = gdf[priority_col].notna().sum()
+                print(f"Checking {priority_col}: {non_null} non-null values")
+                if non_null > 0:
+                    parcel_col_shp = priority_col
+                    print(f"  ✓ Selected {priority_col}")
+                    break
+        
+        # Fallback: search for any column with 'parcel' in the name
+        if not parcel_col_shp:
+            for col in gdf.columns:
+                if 'parcel' in col.lower() or 'idparcel' in col.lower():
+                    non_null = gdf[col].notna().sum()
+                    if non_null > 0:
+                        parcel_col_shp = col
+                        print(f"  ✓ Selected {col} (fallback)")
+                        break
         
         if not parcel_col_shp:
-            raise ValueError("Could not find parcel ID column in shapefile")
+            raise ValueError("Could not find parcel ID column in shapefile with non-null values")
         
-        print(f"Using shapefile column: {parcel_col_shp}")
+        print(f"\nUsing shapefile column: {parcel_col_shp}")
+        
+        # Debug: Show sample raw values from selected column
+        print(f"Sample raw values from {parcel_col_shp}:")
+        print(f"  First 10 rows: {gdf[parcel_col_shp].head(10).tolist()}")
+        # Show first 10 non-null values
+        non_null_samples = gdf[parcel_col_shp].dropna().head(10).tolist()
+        print(f"  First 10 non-null values: {non_null_samples}")
+        
+        # Search for test parcel IDs to see if they exist
+        test_ids = ['01-05-10-00-00-010.001', '03-06-06-00-00-022.000', '01-05-10-00-00-011.000']
+        print(f"\nSearching for test parcel IDs in ALL columns:")
+        for test_id in test_ids:
+            found = False
+            for col in ['STATE_PARC', 'PARCEL_ID', 'LOCAL_ID', 'PROP_ADD']:
+                if col in gdf.columns:
+                    # Try exact match
+                    exact_match = gdf[gdf[col].astype(str) == test_id]
+                    if len(exact_match) > 0:
+                        print(f"  ✓ Found {test_id} in column {col}")
+                        found = True
+                        break
+                    # Try with county prefix
+                    with_prefix = f"29-{test_id}"
+                    prefix_match = gdf[gdf[col].astype(str) == with_prefix]
+                    if len(prefix_match) > 0:
+                        print(f"  ✓ Found {test_id} as {with_prefix} in column {col}")
+                        found = True
+                        break
+            if not found:
+                print(f"  ✗ {test_id} not found in any column")
+                # Try fuzzy search - just the numbers
+                numbers_only = test_id.replace('-', '').replace('.', '')
+                print(f"    Searching for numbers: {numbers_only}")
+                for col in ['STATE_PARC', 'PARCEL_ID', 'LOCAL_ID']:
+                    if col in gdf.columns:
+                        fuzzy = gdf[gdf[col].astype(str).str.replace('-', '').str.replace('.', '').str.contains(numbers_only, na=False)]
+                        if len(fuzzy) > 0:
+                            print(f"    ~ Found fuzzy match in {col}: {fuzzy[col].iloc[0]}")
+                            break
+        
+        # Show samples from other potential ID columns
+        print(f"\nSamples from other ID columns:")
+        for col in ['PARCEL_ID', 'LOCAL_ID']:
+            if col in gdf.columns:
+                samples = gdf[col].dropna().head(5).tolist()
+                print(f"  {col}: {samples}")
         
         # Extract formatted parcel IDs from shapefile
-        gdf["PARCELID_JOIN"] = gdf[parcel_col_shp].apply(extract_parcel_id)
+        # If using LOCAL_ID (numeric only), keep as-is. Otherwise, extract formatted ID.
+        if parcel_col_shp == 'LOCAL_ID':
+            print(f"Using LOCAL_ID - will normalize Excel IDs to match (remove dashes/dots)")
+            gdf["PARCELID_JOIN"] = gdf[parcel_col_shp].astype(str).str.strip()
+        else:
+            gdf["PARCELID_JOIN"] = gdf[parcel_col_shp].apply(extract_parcel_id)
         
-        # Find parcel ID column in Excel - try both Parcel ID and Alternate ID
+        # Find parcel ID column in Excel - try both Parcel ID and State Parcel No
         parcel_col_excel = None
         for col in df.columns:
             if 'parcel' in str(col).lower() and 'id' in str(col).lower():
@@ -225,7 +319,13 @@ class LabelExporter:
         
         print(f"Using Excel column: {parcel_col_excel}")
         
-        df["PARCELID_JOIN"] = df[parcel_col_excel].astype(str).str.strip()
+        # Normalize Excel IDs based on shapefile column format
+        if parcel_col_shp == 'LOCAL_ID':
+            # LOCAL_ID is numeric only - strip dashes and dots from Excel IDs
+            df["PARCELID_JOIN"] = df[parcel_col_excel].astype(str).str.replace('-', '').str.replace('.', '').str.strip()
+        else:
+            # Keep formatted IDs
+            df["PARCELID_JOIN"] = df[parcel_col_excel].astype(str).str.strip()
         
         # Debug: check sample parcel IDs
         print("\nSample Shapefile IDPARCEL (extracted):")
@@ -239,9 +339,17 @@ class LabelExporter:
         matches = excel_ids.intersection(shape_ids)
         print(f"\nMatching PARCELIDs: {len(matches)}")
         
-        # If no matches, try using Alternate ID column
+        # If no matches, try using State Parcel No column (alternate ID)
+        if len(matches) == 0 and "State Parcel No" in df.columns:
+            print("No matches with Parcel ID, trying State Parcel No column...")
+            df["PARCELID_JOIN"] = df["State Parcel No"].astype(str).str.strip()
+            excel_ids = set(df["PARCELID_JOIN"])
+            matches = excel_ids.intersection(shape_ids)
+            print(f"Matching with State Parcel No: {len(matches)}")
+        
+        # If still no matches, try Alternate ID column
         if len(matches) == 0 and "Alternate ID" in df.columns:
-            print("No matches with Parcel ID, trying Alternate ID column...")
+            print("No matches with State Parcel No, trying Alternate ID column...")
             df["PARCELID_JOIN"] = df["Alternate ID"].astype(str).str.strip()
             excel_ids = set(df["PARCELID_JOIN"])
             matches = excel_ids.intersection(shape_ids)

@@ -15,22 +15,25 @@ from auth.entra_id import get_current_user
 jobs_router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 
-def detect_platform(url: str) -> str:
-    """Detect GIS platform from URL"""
+def detect_platform(url: str, county: str = None) -> str:
+    """Detect GIS platform from URL and county name"""
     url_lower = url.lower()
+    county_lower = county.lower() if county else ""
     
+    # Check for specific platforms by URL
     if "wthgis.com" in url_lower:
         return "thinkgis"
     elif "beacon.schneidercorp.com" in url_lower:
         return "beacon"
-    elif "experience.arcgis.com" in url_lower and "hamilton" in url_lower:
-        return "hamilton"
     elif "hamiltoncounty.in.gov" in url_lower:
         return "hamilton"
     elif "elevatemaps.io" in url_lower:
         return "elevate"
     elif "portico.mygisonline.com" in url_lower or "mygisonline.com" in url_lower:
         return "portico"
+    # Special case: Hamilton County uses ArcGIS Experience
+    elif "experience.arcgis.com" in url_lower and "hamilton" in county_lower:
+        return "hamilton"
     elif "arcgis.com" in url_lower or "arcgis" in url_lower:
         return "arcgis"
     else:
@@ -118,7 +121,7 @@ async def create_parcel_job(
     await parcel_file.seek(0)
     
     # Detect platform
-    platform = detect_platform(gis_url)
+    platform = detect_platform(gis_url, county)
     
     # Create temporary directory for this job
     temp_dir = os.path.join(tempfile.gettempdir(), "parcel_jobs", job_id)

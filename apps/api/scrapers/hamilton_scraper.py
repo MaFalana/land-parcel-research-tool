@@ -110,15 +110,8 @@ class HamiltonScraper(BaseScraper):
             page = context.new_page()
             
             try:
-                # Navigate to ArcGIS Experience
-                print(f"Navigating to: {base_url}")
-                page.goto(base_url, wait_until="domcontentloaded", timeout=60000)
-                
-                # Wait for page to load (ArcGIS Experience is heavy)
-                page.wait_for_timeout(5000)
-                
-                # TODO: Find and wait for search box to be ready
-                print("Waiting for search interface to load...")
+                # We navigate directly to property pages, no need for ArcGIS Experience
+                print(f"Browser ready for direct property page access")
                 
                 # Process each parcel
                 for idx, parcel_id in enumerate(parcel_ids, start=1):
@@ -153,7 +146,7 @@ class HamiltonScraper(BaseScraper):
                             if parcel_data.get('prc_url'):
                                 try:
                                     owner_stub = self._owner_filename_stub(parcel_data.get('owner_name', 'Unknown'))
-                                    pdf_filename = self._safe_filename(f"{owner_stub}_{parcel_id}.pdf")
+                                    pdf_filename = self._safe_filename(f"{parcel_id}_{owner_stub}.pdf")
                                     prc_full_path = os.path.join(pdfs_dir, pdf_filename)
                                     
                                     self._download_prc(session, parcel_data['prc_url'], prc_full_path)
@@ -218,31 +211,390 @@ class HamiltonScraper(BaseScraper):
         """
         Search for a parcel and extract data
         
+        Hamilton County property pages can be accessed directly via URL:
+        https://secure2.hamiltoncounty.in.gov/propertyreports/reports.aspx?parcel={parcel_id_no_dashes}
+        
+        This bypasses the need for ArcGIS search and map interaction.
+        
         Args:
             page: Playwright page object
-            parcel_id: Parcel ID to search for
-            base_url: Base URL of ArcGIS Experience
+            parcel_id: Parcel ID to search for (e.g., "03-06-06-00-00-022.000")
+            base_url: Base URL of ArcGIS Experience (not used, kept for compatibility)
         
         Returns dict with parcel data or None if not found
         """
         try:
-            # TODO: Implement search logic
-            # 1. Find search box
-            # 2. Enter parcel ID
-            # 3. Wait for results
-            # 4. Click on result
-            # 5. Extract data from popup or navigate to property page
+            print(f"  Accessing property page for: {parcel_id}")
             
-            print(f"  Searching for parcel: {parcel_id}")
+            # Convert parcel ID to URL format (remove dashes and dots)
+            # Example: "03-06-06-00-00-022.000" -> "0306060000022000"
+            parcel_id_clean = parcel_id.replace('-', '').replace('.', '')
             
-            # Placeholder - will implement after testing
-            return None
+            # Construct direct URL to property page
+            property_url = f"https://secure2.hamiltoncounty.in.gov/propertyreports/reports.aspx?parcel={parcel_id_clean}"
+            
+            print(f"  Navigating to: {property_url}")
+            
+            # Navigate directly to property page
+            response = page.goto(property_url, wait_until="domcontentloaded", timeout=60000)
+            
+            # Check if page loaded successfully
+            if response.status != 200:
+                print(f"  ✗ Property page returned status {response.status}")
+                return None
+            
+            # Wait for page to fully load - Hamilton County pages can be slow
+            page.wait_for_timeout(5000)
+            
+            # Check if we got a valid property page (look for owner info)
+            try:
+                owner_elem = page.locator('span#ownerCR').first
+                owner_elem.wait_for(state="attached", timeout=10000)
+                print(f"  ✓ Property page loaded successfully")
+            except Exception as e:
+                print(f"  ✗ Property not found or page did not load correctly: {e}")
+                # Save HTML for debugging
+                try:
+                    page_title = page.title()
+                    print(f"  Page title: {page_title}")
+                except:
+                    pass
+                return None
+            
+            # Extract data from property page
+            data = self._extract_property_data(page, parcel_id)
+            
+            if not data:
+                print(f"  ✗ Could not extract property data")
+                return None
+            
+            return data
             
         except Exception as e:
-            print(f"Error searching for parcel {parcel_id}: {e}")
+            print(f"Error accessing property page for {parcel_id}: {e}")
             import traceback
             traceback.print_exc()
             return None
+    
+    def _extract_property_data(self, page, parcel_id: str) -> Optional[Dict]:
+        """
+        Extract property data from Hamilton County property information page
+        
+        Hamilton County uses specific span IDs for data:
+        - ownerCR: Owner name
+        - ownerAddress1CR, ownerAddress2CR, ownerAddress3CR: Mailing address
+        - Property location is in the page text
+        - PRC links are in the Assessment section
+        
+        Returns dict with all property fields
+        """
+        data = {
+            'state_parcel_no': parcel_id,  # Hamilton uses same format
+            'owner_name': '',
+            'owner_address': '',
+            'owner_city': '',
+            'owner_state': '',
+            'owner_zip': '',
+            'parcel_address': '',
+            'parcel_city': '',
+            'parcel_state': '',
+            'parcel_zip': '',
+            'legal_description': '',
+            'latest_deed_date': '',
+            'document_number': '',
+            'deed_code': '',
+            'prc_url': None
+        }
+        
+        try:
+            print(f"  Extracting property data...")
+            
+            # Extract Owner Name from span#ownerCR
+            try:
+                # Wait for the page to fully load
+                page.wait_for_load_state('networkidle', timeout=10000)
+                page.wait_for_timeout(2000)
+                
+                owner_elem = page.locator('span#ownerCR').first
+                owner_elem.wait_for(state="attached", timeout=5000)
+                data['owner_name'] = owner_elem.inner_text().strip()
+                print(f"    Owner: {data['owner_name']}")
+            except Exception as e:
+                print(f"    Could not find owner name with span#ownerCR: {e}")
+                # Try alternative: look in page HTML directly
+                try:
+                    page_html = page.content()
+                    import re
+                    owner_match = re.search(r'<span id="ownerCR">(.*?)</span>', page_html)
+                    if owner_match:
+                        data['owner_name'] = owner_match.group(1).strip()
+                        print(f"    Owner (from HTML): {data['owner_name']}")
+                except Exception as e2:
+                    print(f"    Could not extract owner from HTML: {e2}")
+            
+            # Extract Owner Address from span#ownerAddress1CR, ownerAddress2CR, ownerAddress3CR
+            try:
+                addr_parts = []
+                page_html = page.content()
+                import re
+                
+                # Extract from HTML directly for reliability
+                for addr_id in ['ownerAddress1CR', 'ownerAddress2CR', 'ownerAddress3CR']:
+                    match = re.search(rf'<span id="{addr_id}">(.*?)</span>', page_html)
+                    if match:
+                        text = match.group(1).strip()
+                        if text and text != ' ':
+                            addr_parts.append(text)
+                
+                if addr_parts:
+                    # Combine all address parts
+                    full_address = ', '.join(addr_parts)
+                    # Parse into components
+                    parsed = self._parse_address(full_address)
+                    data['owner_address'] = parsed['street']
+                    data['owner_city'] = parsed['city']
+                    data['owner_state'] = parsed['state']
+                    data['owner_zip'] = parsed['zip']
+                    print(f"    Mailing Address: {full_address}")
+            except Exception as e:
+                print(f"    Could not extract owner address: {e}")
+            
+            # Extract Property Location
+            try:
+                # Look for "Property Location:" in the page text
+                page_text = page.content()
+                import re
+                prop_loc_match = re.search(r'Property Location:\s*([^<]+)', page_text)
+                if prop_loc_match:
+                    prop_location = prop_loc_match.group(1).strip()
+                    parsed = self._parse_address(prop_location)
+                    
+                    # Skip street number if it's "0"
+                    street = parsed['street']
+                    if street.startswith('0 '):
+                        street = street[2:]  # Remove "0 " prefix
+                    
+                    data['parcel_address'] = street
+                    data['parcel_city'] = parsed['city']
+                    data['parcel_state'] = parsed['state']
+                    data['parcel_zip'] = parsed['zip']
+                    print(f"    Property Location: {prop_location}")
+            except Exception as e:
+                print(f"    Could not extract property location: {e}")
+            
+            # Try to click Ownership tab to get more details
+            try:
+                ownership_tab = page.locator('a#ownershipInfo, button:has-text("Ownership")').first
+                if ownership_tab.is_visible(timeout=2000):
+                    ownership_tab.click()
+                    page.wait_for_timeout(1000)
+                    
+                    # Look for legal description
+                    try:
+                        legal_elem = page.locator('text=/Legal Description/i').first
+                        if legal_elem.is_visible(timeout=2000):
+                            # Get the next element or parent that contains the actual description
+                            parent = legal_elem.locator('xpath=..').first
+                            legal_text = parent.inner_text()
+                            # Extract just the description part
+                            import re
+                            legal_match = re.search(r'Legal Description[:\s]+(.*)', legal_text, re.IGNORECASE | re.DOTALL)
+                            if legal_match:
+                                data['legal_description'] = legal_match.group(1).strip()[:500]  # Limit length
+                    except:
+                        pass
+                    
+                    # Look for deed information in transfer table
+                    try:
+                        # Hamilton County has a transfer table with deed info
+                        transfer_rows = page.locator('tbody#transferTable tr').all()
+                        if transfer_rows:
+                            # Get the first (most recent) transfer
+                            first_row = transfer_rows[0]
+                            row_text = first_row.inner_text()
+                            
+                            # Extract date (first cell)
+                            cells = first_row.locator('td').all()
+                            if cells:
+                                date_text = cells[0].inner_text().strip()
+                                # Extract just the date part (before any newline)
+                                date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', date_text)
+                                if date_match:
+                                    data['latest_deed_date'] = date_match.group(1)
+                    except:
+                        pass
+            except:
+                pass
+            
+            # Now look for Property Record Card in Assessment section
+            print(f"  Looking for Property Record Card...")
+            
+            try:
+                # Try to find and click Assessment tab
+                assessment_selectors = [
+                    'a#propertyAssessments',
+                    'button:has-text("Property Assessments")',
+                    'a:has-text("Property Assessments")'
+                ]
+                
+                for selector in assessment_selectors:
+                    try:
+                        assessment_tab = page.locator(selector).first
+                        if assessment_tab.is_visible(timeout=2000):
+                            assessment_tab.click()
+                            page.wait_for_timeout(2000)
+                            break
+                    except:
+                        continue
+            except:
+                pass
+            
+            # Look for PRC links with pattern: /publicdocs/PRC/PRC{year}/{id}.pdf
+            try:
+                page_html = page.content()
+                import re
+                
+                # Find all PRC links
+                prc_pattern = r'href="(https://secure2\.hamiltoncounty\.in\.gov/publicdocs/PRC/PRC(\d{4})/\d+\.pdf)"'
+                prc_matches = re.findall(prc_pattern, page_html)
+                
+                if prc_matches:
+                    print(f"    Found {len(prc_matches)} Property Record Cards")
+                    
+                    # Select the most recent year
+                    best_url = None
+                    best_year = 0
+                    
+                    for url, year in prc_matches:
+                        year_int = int(year)
+                        if year_int > best_year:
+                            best_year = year_int
+                            best_url = url
+                    
+                    if best_url:
+                        data['prc_url'] = best_url
+                        print(f"    Selected PRC from year {best_year}")
+                else:
+                    print(f"    No Property Record Cards found")
+                    
+            except Exception as e:
+                print(f"    Error finding PRC: {e}")
+            
+            return data
+            
+        except Exception as e:
+            print(f"  Error extracting property data: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _extract_popup_data(self, page, parcel_id: str) -> Optional[Dict]:
+        """
+        Extract property data from ArcGIS popup (if property page not available)
+        
+        Returns dict with available fields from popup
+        """
+        data = {
+            'state_parcel_no': '',
+            'owner_name': '',
+            'owner_address': '',
+            'owner_city': '',
+            'owner_state': '',
+            'owner_zip': '',
+            'parcel_address': '',
+            'parcel_city': '',
+            'parcel_state': '',
+            'parcel_zip': '',
+            'legal_description': '',
+            'latest_deed_date': '',
+            'document_number': '',
+            'deed_code': '',
+            'prc_url': None
+        }
+        
+        try:
+            # Find the popup element
+            popup = page.locator('.esri-popup, .esri-feature-popup, [class*="popup"]').first
+            
+            # Extract all text content from popup
+            popup_text = popup.inner_text()
+            print(f"  Popup text: {popup_text[:200]}...")
+            
+            # Try to extract fields using regex patterns
+            import re
+            
+            # State Parcel No
+            state_parcel_match = re.search(r'State Parcel.*?:?\s*([\d\-\.]+)', popup_text, re.IGNORECASE)
+            if state_parcel_match:
+                data['state_parcel_no'] = state_parcel_match.group(1)
+            
+            # Owner Name
+            owner_match = re.search(r'Owner.*?:?\s*([^\n]+)', popup_text, re.IGNORECASE)
+            if owner_match:
+                data['owner_name'] = owner_match.group(1).strip()
+            
+            # This is a fallback - popup may not have all the data we need
+            # Return what we can extract
+            return data
+            
+        except Exception as e:
+            print(f"  Error extracting popup data: {e}")
+            return None
+    
+    def _parse_address(self, address_text: str) -> Dict[str, str]:
+        """
+        Parse address text into components (street, city, state, zip)
+        
+        Handles formats like:
+        - "123 Main St, City, ST 12345"
+        - "123 Main St\nCity, ST 12345"
+        - "123 Main St City ST 12345"
+        - "26970 Pacific Terrace Dr, Mission Viejo, CA 92692"
+        """
+        import re
+        
+        result = {
+            'street': '',
+            'city': '',
+            'state': '',
+            'zip': ''
+        }
+        
+        if not address_text:
+            return result
+        
+        # Replace newlines with commas for easier parsing
+        address_text = address_text.replace('\n', ', ').replace('\r', '')
+        # Clean up multiple commas and spaces
+        address_text = re.sub(r',\s*,', ',', address_text)
+        address_text = re.sub(r'\s+', ' ', address_text).strip()
+        
+        # Try to extract ZIP code (5 digits or 5+4 format) - must be at the end or before end
+        zip_match = re.search(r',?\s*(\d{5}(?:-\d{4})?)\s*$', address_text)
+        if zip_match:
+            result['zip'] = zip_match.group(1)
+            # Remove ZIP from text (only from the end)
+            address_text = address_text[:zip_match.start()].strip()
+        
+        # Try to extract state (2 letter code at the end)
+        state_match = re.search(r',?\s*([A-Z]{2})\s*$', address_text)
+        if state_match:
+            result['state'] = state_match.group(1)
+            # Remove state from text
+            address_text = address_text[:state_match.start()].strip()
+        
+        # Split remaining text by comma
+        parts = [p.strip() for p in address_text.split(',') if p.strip()]
+        
+        if len(parts) >= 2:
+            # First part is street, last part is city
+            result['street'] = parts[0]
+            result['city'] = parts[-1]
+        elif len(parts) == 1:
+            # Only one part - assume it's the street
+            result['street'] = parts[0]
+        
+        return result
     
     def _create_excel_template(self, county: str) -> openpyxl.Workbook:
         """Create Excel workbook with formatted headers"""

@@ -229,9 +229,9 @@ class BeaconScraper(BaseScraper):
                             prc_path = ''
                             if parcel_data.get('prc_url'):
                                 try:
-                                    # Create filename: {owner_stub}_{parcel_id}.pdf
+                                    # Create filename: {parcel_id}_{owner_stub}.pdf
                                     owner_stub = self._owner_filename_stub(parcel_data.get('owner_name', 'Unknown'))
-                                    pdf_filename = self._safe_filename(f"{owner_stub}_{parcel_id}.pdf")
+                                    pdf_filename = self._safe_filename(f"{parcel_id}_{owner_stub}.pdf")
                                     prc_full_path = os.path.join(pdfs_dir, pdf_filename)
                                     
                                     # Download PRC with polite delay
