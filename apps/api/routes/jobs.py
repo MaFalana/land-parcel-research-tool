@@ -23,6 +23,10 @@ def detect_platform(url: str) -> str:
         return "thinkgis"
     elif "beacon.schneidercorp.com" in url_lower:
         return "beacon"
+    elif "experience.arcgis.com" in url_lower and "hamilton" in url_lower:
+        return "hamilton"
+    elif "hamiltoncounty.in.gov" in url_lower:
+        return "hamilton"
     elif "elevatemaps.io" in url_lower:
         return "elevate"
     elif "portico.mygisonline.com" in url_lower or "mygisonline.com" in url_lower:
