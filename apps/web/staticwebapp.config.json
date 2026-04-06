@@ -27,7 +27,10 @@
     },
     {
       "route": "/*",
-      "allowedRoles": ["anonymous", "authenticated"]
+      "allowedRoles": [
+        "anonymous",
+        "authenticated"
+      ]
     }
   ],
   "_routes_disabled": [
@@ -41,7 +44,9 @@
     },
     {
       "route": "/tools/land-parcel-automater/*",
-      "allowedRoles": ["authenticated"]
+      "allowedRoles": [
+        "authenticated"
+      ]
     }
   ],
   "_responseOverrides_disabled": {
@@ -52,6 +57,10 @@
   },
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/_astro/*", "/assets/*", "*.{css,scss,js,png,gif,ico,jpg,svg,json}"]
+    "exclude": [
+      "/_astro/*",
+      "/assets/*",
+      "*.{css,scss,js,png,gif,ico,jpg,svg,json}"
+    ]
   }
 }

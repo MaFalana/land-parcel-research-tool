@@ -20,50 +20,49 @@ BOUNDARY_LAYER = "PARCEL_BOUNDARIES_NOTES"
 LABEL_LAYER = "PARCEL_LABELS"
 
 
-def extract_parcel_id(idparcel: str) -> str:
+def normalize_to_state_parcel(pid: str) -> str:
     """
-    Extract the formatted parcel ID from IDPARCEL by finding the pattern XX-XX-XX-
+    Normalize any parcel ID format to state parcel number (digits only).
     
-    The IDPARCEL has extra digits at the start, we need to extract the part that matches Excel format
-    Format in Excel: 28-08-22-442-023.000-025
-    Format in IDPARCEL: 1400816928-08-22-442-023.000-025 (starts with extra digits before the dash)
-    
-    If the ID is already in the correct format, return as-is.
+    Examples:
+        "40-09-33-140-011.001-004" -> "400933140011001004"
+        "29-05-10-000-010.001"     -> "290510000010001"
+        "400933140011001004"       -> "400933140011001004"  (already normalized)
+        "1400816928-08-22-442-023.000-025" -> extract & normalize
     """
-    idparcel_str = str(idparcel).strip()
+    pid_str = str(pid).strip()
+    if pid_str.lower() in ['nan', 'none', '']:
+        return pid_str
     
-    # Handle NaN or empty values
-    if idparcel_str.lower() in ['nan', 'none', '']:
-        return idparcel_str
-    
-    # Check if already in correct format (starts with XX-XX-XX pattern)
-    if re.match(r'^\d{2}-\d{2}-\d{2}-', idparcel_str):
-        return idparcel_str
-    
-    # Find the first occurrence of pattern like "28-08-22-" (2 digits, dash, 2 digits, dash, 2 digits, dash)
-    match = re.search(r'\d{2}-\d{2}-\d{2}-', idparcel_str)
+    # If it has dashes, it's a formatted parcel ID - first extract the real part
+    # Some IDs have extra prefix digits before the XX-XX-XX pattern
+    match = re.search(r'\d{2}-\d{2}-\d{2}-', pid_str)
     if match:
-        return idparcel_str[match.start():]
+        pid_str = pid_str[match.start():]
     
-    return idparcel_str
+    # Strip all dashes and dots to get state parcel number
+    return re.sub(r'[-.]', '', pid_str)
 
 
 def build_label(row: pd.Series) -> str:
     """
-    Build label text from parcel data
+    Build label text from parcel data.
+    Always uses state parcel number for output.
     
     Format:
-    PARCEL# {id}
+    PARCEL# {state_parcel_id}
     {OWNER NAME}
     INST# {number} or BK. {book}, PG. {page}
     """
     parts = []
     
-    # Add parcel number (no space after #)
-    if "PARCELID_JOIN" in row and pd.notna(row["PARCELID_JOIN"]):
+    # Add parcel number - prefer state parcel format
+    if "STATE_PARCEL_JOIN" in row and pd.notna(row["STATE_PARCEL_JOIN"]):
+        parts.append(f"PARCEL# {row['STATE_PARCEL_JOIN']}")
+    elif "PARCELID_JOIN" in row and pd.notna(row["PARCELID_JOIN"]):
         parts.append(f"PARCEL# {row['PARCELID_JOIN']}")
     elif "Parcel ID" in row and pd.notna(row["Parcel ID"]):
-        parts.append(f"PARCEL# {row['Parcel ID']}")
+        parts.append(f"PARCEL# {normalize_to_state_parcel(str(row['Parcel ID']))}")
     
     # Add owner name (capitalized)
     owner_col = None
@@ -84,8 +83,7 @@ def build_label(row: pd.Series) -> str:
     
     if inst_col:
         inst = str(row[inst_col]).strip()
-        if inst and inst.lower() != 'nan':  # Make sure it's not empty or 'nan'
-            # Check if it's in book/page format (contains /)
+        if inst and inst.lower() != 'nan':
             if "/" in inst:
                 book, page = inst.split("/", 1)
                 parts.append(f"BK. {book.strip()}, PG. {page.strip()}")
@@ -97,15 +95,12 @@ def build_label(row: pd.Series) -> str:
 
 class LabelExporter:
     """
-    Processes scraped parcel data and shapefiles to generate labels
+    Processes scraped parcel data and shapefiles to generate labels.
     
-    Steps:
-    1. Load scraped Excel data
-    2. Extract and load shapefiles from ZIP
-    3. Join parcel data with shapefile geometries
-    4. Reproject to target CRS
-    5. Generate label text
-    6. Export to DXF and CSV
+    Matching strategy:
+    - Always joins on STATE_PARC (state parcel number, digits only)
+    - Accepts any input format (formatted or numeric) and normalizes
+    - Outputs always use state parcel number
     """
     
     def __init__(
@@ -115,296 +110,193 @@ class LabelExporter:
         crs_id: int,
         job_id: str
     ):
-        """
-        Initialize label exporter
-        
-        Args:
-            scraped_excel_path: Path to enriched Excel file from scraper
-            shapefile_zip_path: Path to ZIP file containing shapefiles
-            crs_id: Target EPSG code for coordinate system
-            job_id: Job ID for organizing output files
-        """
         self.scraped_excel_path = scraped_excel_path
         self.shapefile_zip_path = shapefile_zip_path
         self.crs_id = crs_id
         self.job_id = job_id
         
         self.output_dir = os.path.join(
-            tempfile.gettempdir(),
-            "parcel_jobs",
-            job_id,
-            "output"
+            tempfile.gettempdir(), "parcel_jobs", job_id, "output"
         )
         os.makedirs(self.output_dir, exist_ok=True)
         
-        # Extract shapefiles
         self.shapefile_dir = os.path.join(
-            tempfile.gettempdir(),
-            "parcel_jobs",
-            job_id,
-            "shapefiles"
+            tempfile.gettempdir(), "parcel_jobs", job_id, "shapefiles"
         )
         os.makedirs(self.shapefile_dir, exist_ok=True)
-    
-    def export(self) -> Dict[str, str]:
-        """
-        Generate DXF label file
-        
-        Returns:
-            Dict with path to generated file:
-                - dxf_path: Path to DXF file
-        """
-        print(f"LabelExporter: Starting export for job {self.job_id}")
-        
-        # Extract shapefiles from ZIP
+
+    def _find_shapefile(self) -> str:
+        """Extract ZIP and find Parcels.shp"""
         print("Extracting shapefiles...")
         with zipfile.ZipFile(self.shapefile_zip_path, 'r') as zip_ref:
-            # List contents before extraction
             print(f"ZIP contents: {zip_ref.namelist()}")
             zip_ref.extractall(self.shapefile_dir)
         
-        # List extracted files
-        print(f"Extracted to: {self.shapefile_dir}")
-        extracted_files = []
         for root, dirs, files in os.walk(self.shapefile_dir):
             for file in files:
-                rel_path = os.path.relpath(os.path.join(root, file), self.shapefile_dir)
-                extracted_files.append(rel_path)
-        print(f"Extracted files: {extracted_files}")
-        
-        # Find the Parcels.shp file specifically (search recursively in case files are in subdirectory)
-        shp_path = None
-        for root, dirs, files in os.walk(self.shapefile_dir):
-            for file in files:
-                # Look for Parcels.shp or Parcel.shp (case-insensitive)
                 if file.lower() in ['parcels.shp', 'parcel.shp']:
-                    shp_path = os.path.join(root, file)
-                    break
-            if shp_path:
-                break
+                    return os.path.join(root, file)
         
-        if not shp_path:
-            raise FileNotFoundError(
-                f"No Parcels.shp or Parcel.shp file found in ZIP. "
-                f"Extracted files: {extracted_files}. "
-                f"Please ensure the shapefile is named 'Parcels.shp' or 'Parcel.shp'."
-            )
-        
-        print(f"Found shapefile: {shp_path}")
+        extracted = []
+        for root, dirs, files in os.walk(self.shapefile_dir):
+            for file in files:
+                extracted.append(os.path.relpath(os.path.join(root, file), self.shapefile_dir))
+        raise FileNotFoundError(
+            f"No Parcels.shp found in ZIP. Files: {extracted}"
+        )
+    
+    def _find_excel_parcel_col(self, df: pd.DataFrame) -> str:
+        """Find the parcel ID column in Excel data."""
+        for col in df.columns:
+            if 'parcel' in str(col).lower() and 'id' in str(col).lower():
+                return col
+        raise ValueError(f"Could not find parcel ID column in Excel. Columns: {df.columns.tolist()}")
+
+    def export(self) -> Dict[str, str]:
+        """Generate DXF label file."""
+        print(f"LabelExporter: Starting export for job {self.job_id}")
         
         # Load shapefile
-        print("Loading shapefile...")
+        shp_path = self._find_shapefile()
+        print(f"Found shapefile: {shp_path}")
         gdf = gpd.read_file(shp_path)
         print(f"Loaded {len(gdf)} parcels from shapefile")
         print(f"Shapefile columns: {gdf.columns.tolist()}")
         
-        # Load scraped Excel data
+        # Load Excel
         print("Loading scraped data...")
-        # Try to read with header in row 1 (0-indexed) or row 2 (1-indexed)
         try:
             df = pd.read_excel(self.scraped_excel_path, header=0)
-        except:
+        except Exception:
             df = pd.read_excel(self.scraped_excel_path, header=1)
-        
         print(f"Loaded {len(df)} parcels from Excel")
         print(f"Excel columns: {df.columns.tolist()}")
         
-        # Normalize parcel IDs for joining
-        # Find the parcel ID column in shapefile
-        
-        # Debug: Show all available columns and their sample values FIRST
+        # Debug: column analysis
         print(f"\n=== SHAPEFILE COLUMN ANALYSIS ===")
-        print(f"Total columns: {len(gdf.columns)}")
         for col in gdf.columns:
-            non_null_count = gdf[col].notna().sum()
-            if non_null_count > 0:  # Only show columns with data
-                sample_vals = gdf[col].head(3).tolist()
-                print(f"  {col}: {non_null_count}/{len(gdf)} non-null, samples: {sample_vals}")
-        print(f"=== END COLUMN ANALYSIS ===\n")
+            if col == 'geometry':
+                continue
+            non_null = gdf[col].notna().sum()
+            if non_null > 0:
+                samples = gdf[col].head(3).tolist()
+                print(f"  {col}: {non_null}/{len(gdf)} non-null, samples: {samples}")
+        print(f"=== END ===\n")
         
-        parcel_col_shp = None
+        # --- BUILD JOIN KEY: always normalize to state parcel number ---
         
-        # Priority order for shapefile columns
-        # For Hamilton County, LOCAL_ID has the numeric format that matches
-        priority_columns = ['LOCAL_ID', 'PARCEL_ID', 'STATE_PARC', 'IDPARCEL', 'PIN']
-        
-        for priority_col in priority_columns:
-            if priority_col in gdf.columns:
-                # Check if this column has actual data (not all NaN)
-                non_null = gdf[priority_col].notna().sum()
-                print(f"Checking {priority_col}: {non_null} non-null values")
-                if non_null > 0:
-                    parcel_col_shp = priority_col
-                    print(f"  ✓ Selected {priority_col}")
-                    break
-        
-        # Fallback: search for any column with 'parcel' in the name
-        if not parcel_col_shp:
-            for col in gdf.columns:
-                if 'parcel' in col.lower() or 'idparcel' in col.lower():
-                    non_null = gdf[col].notna().sum()
-                    if non_null > 0:
-                        parcel_col_shp = col
-                        print(f"  ✓ Selected {col} (fallback)")
-                        break
-        
-        if not parcel_col_shp:
-            raise ValueError("Could not find parcel ID column in shapefile with non-null values")
-        
-        print(f"\nUsing shapefile column: {parcel_col_shp}")
-        
-        # Debug: Show sample raw values from selected column
-        print(f"Sample raw values from {parcel_col_shp}:")
-        print(f"  First 10 rows: {gdf[parcel_col_shp].head(10).tolist()}")
-        # Show first 10 non-null values
-        non_null_samples = gdf[parcel_col_shp].dropna().head(10).tolist()
-        print(f"  First 10 non-null values: {non_null_samples}")
-        
-        # Search for test parcel IDs to see if they exist
-        test_ids = ['01-05-10-00-00-010.001', '03-06-06-00-00-022.000', '01-05-10-00-00-011.000']
-        print(f"\nSearching for test parcel IDs in ALL columns:")
-        for test_id in test_ids:
-            found = False
-            for col in ['STATE_PARC', 'PARCEL_ID', 'LOCAL_ID', 'PROP_ADD']:
-                if col in gdf.columns:
-                    # Try exact match
-                    exact_match = gdf[gdf[col].astype(str) == test_id]
-                    if len(exact_match) > 0:
-                        print(f"  ✓ Found {test_id} in column {col}")
-                        found = True
-                        break
-                    # Try with county prefix
-                    with_prefix = f"29-{test_id}"
-                    prefix_match = gdf[gdf[col].astype(str) == with_prefix]
-                    if len(prefix_match) > 0:
-                        print(f"  ✓ Found {test_id} as {with_prefix} in column {col}")
-                        found = True
-                        break
-            if not found:
-                print(f"  ✗ {test_id} not found in any column")
-                # Try fuzzy search - just the numbers
-                numbers_only = test_id.replace('-', '').replace('.', '')
-                print(f"    Searching for numbers: {numbers_only}")
-                for col in ['STATE_PARC', 'PARCEL_ID', 'LOCAL_ID']:
-                    if col in gdf.columns:
-                        fuzzy = gdf[gdf[col].astype(str).str.replace('-', '').str.replace('.', '').str.contains(numbers_only, na=False)]
-                        if len(fuzzy) > 0:
-                            print(f"    ~ Found fuzzy match in {col}: {fuzzy[col].iloc[0]}")
-                            break
-        
-        # Show samples from other potential ID columns
-        print(f"\nSamples from other ID columns:")
-        for col in ['PARCEL_ID', 'LOCAL_ID']:
-            if col in gdf.columns:
-                samples = gdf[col].dropna().head(5).tolist()
-                print(f"  {col}: {samples}")
-        
-        # Extract formatted parcel IDs from shapefile
-        # If using LOCAL_ID (numeric only), keep as-is. Otherwise, extract formatted ID.
-        if parcel_col_shp == 'LOCAL_ID':
-            print(f"Using LOCAL_ID - will normalize Excel IDs to match (remove dashes/dots)")
-            gdf["PARCELID_JOIN"] = gdf[parcel_col_shp].astype(str).str.strip()
+        # Shapefile side: prefer STATE_PARC, fall back to normalizing PARCEL_ID
+        if 'STATE_PARC' in gdf.columns and gdf['STATE_PARC'].notna().sum() > 0:
+            print("Using STATE_PARC from shapefile (primary)")
+            gdf["STATE_PARCEL_JOIN"] = gdf['STATE_PARC'].astype(str).str.strip()
+        elif 'PARCEL_ID' in gdf.columns and gdf['PARCEL_ID'].notna().sum() > 0:
+            print("STATE_PARC not available, normalizing PARCEL_ID to state parcel format")
+            gdf["STATE_PARCEL_JOIN"] = gdf['PARCEL_ID'].apply(normalize_to_state_parcel)
+        elif 'IDPARCEL' in gdf.columns and gdf['IDPARCEL'].notna().sum() > 0:
+            print("Using IDPARCEL, normalizing to state parcel format")
+            gdf["STATE_PARCEL_JOIN"] = gdf['IDPARCEL'].apply(normalize_to_state_parcel)
         else:
-            gdf["PARCELID_JOIN"] = gdf[parcel_col_shp].apply(extract_parcel_id)
+            raise ValueError("Could not find STATE_PARC, PARCEL_ID, or IDPARCEL in shapefile")
         
-        # Find parcel ID column in Excel - try both Parcel ID and State Parcel No
-        parcel_col_excel = None
-        for col in df.columns:
-            if 'parcel' in str(col).lower() and 'id' in str(col).lower():
-                parcel_col_excel = col
-                break
+        print(f"Sample shapefile join keys: {gdf['STATE_PARCEL_JOIN'].dropna().head(5).tolist()}")
         
-        if not parcel_col_excel:
-            raise ValueError("Could not find parcel ID column in Excel")
-        
+        # Excel side: find parcel ID column and normalize to state parcel number
+        parcel_col_excel = self._find_excel_parcel_col(df)
         print(f"Using Excel column: {parcel_col_excel}")
+        df["STATE_PARCEL_JOIN"] = df[parcel_col_excel].apply(normalize_to_state_parcel)
+        print(f"Sample Excel join keys: {df['STATE_PARCEL_JOIN'].head(5).tolist()}")
         
-        # Normalize Excel IDs based on shapefile column format
-        if parcel_col_shp == 'LOCAL_ID':
-            # LOCAL_ID is numeric only - strip dashes and dots from Excel IDs
-            df["PARCELID_JOIN"] = df[parcel_col_excel].astype(str).str.replace('-', '').str.replace('.', '').str.strip()
-        else:
-            # Keep formatted IDs
-            df["PARCELID_JOIN"] = df[parcel_col_excel].astype(str).str.strip()
-        
-        # Debug: check sample parcel IDs
-        print("\nSample Shapefile IDPARCEL (extracted):")
-        print(gdf["PARCELID_JOIN"].head(10).tolist())
-        print("\nSample Excel PARCELIDs:")
-        print(df["PARCELID_JOIN"].head(10).tolist())
-        
-        # Check if any Excel PARCELIDs exist in shapefile
-        excel_ids = set(df["PARCELID_JOIN"])
-        shape_ids = set(gdf["PARCELID_JOIN"])
+        # --- MATCH ---
+        excel_ids = set(df["STATE_PARCEL_JOIN"])
+        shape_ids = set(gdf["STATE_PARCEL_JOIN"])
         matches = excel_ids.intersection(shape_ids)
-        print(f"\nMatching PARCELIDs: {len(matches)}")
+        print(f"\nExact match: {len(matches)}/{len(excel_ids)} parcels")
         
-        # If no matches, try using State Parcel No column (alternate ID)
-        if len(matches) == 0 and "State Parcel No" in df.columns:
-            print("No matches with Parcel ID, trying State Parcel No column...")
-            df["PARCELID_JOIN"] = df["State Parcel No"].astype(str).str.strip()
-            excel_ids = set(df["PARCELID_JOIN"])
-            matches = excel_ids.intersection(shape_ids)
-            print(f"Matching with State Parcel No: {len(matches)}")
-        
-        # If still no matches, try Alternate ID column
-        if len(matches) == 0 and "Alternate ID" in df.columns:
-            print("No matches with State Parcel No, trying Alternate ID column...")
-            df["PARCELID_JOIN"] = df["Alternate ID"].astype(str).str.strip()
-            excel_ids = set(df["PARCELID_JOIN"])
-            matches = excel_ids.intersection(shape_ids)
-            print(f"Matching with Alternate ID: {len(matches)}")
+        # If no exact matches, try prefix matching.
+        # Users may input local IDs without the township suffix, e.g.:
+        #   Input:    "290510000010001"     (15 digits)
+        #   Shapefile: "290510000010001013"  (18 digits, with township)
+        # In this case the input is a prefix of the state parcel number.
+        if len(matches) == 0:
+            print("No exact matches. Trying prefix match (input may lack township suffix)...")
+            
+            # Build a prefix lookup: for each shapefile ID, index all prefixes
+            # that could match a shorter input ID
+            prefix_map = {}  # excel_id -> shapefile_state_parcel
+            for eid in excel_ids:
+                for sid in shape_ids:
+                    if sid.startswith(eid):
+                        prefix_map[eid] = sid
+                        break
+            
+            if prefix_map:
+                print(f"Prefix match: {len(prefix_map)}/{len(excel_ids)} parcels")
+                # Update Excel join keys to the full state parcel number
+                df["STATE_PARCEL_JOIN"] = df["STATE_PARCEL_JOIN"].map(
+                    lambda x: prefix_map.get(x, x)
+                )
+                matches = set(df["STATE_PARCEL_JOIN"]).intersection(shape_ids)
+                print(f"After prefix resolution: {len(matches)} matches")
         
         if len(matches) == 0:
-            raise ValueError("No matching parcel IDs found between Excel and shapefile. Tried both Parcel ID and Alternate ID columns.")
+            # Diagnostic dump
+            print("\n=== MATCH FAILURE DIAGNOSTICS ===")
+            print(f"Excel IDs (first 5): {list(excel_ids)[:5]}")
+            print(f"Shapefile IDs (first 5): {list(shape_ids)[:5]}")
+            for col in gdf.columns:
+                if col not in ('geometry', 'STATE_PARCEL_JOIN'):
+                    samples = gdf[col].dropna().head(3).tolist()
+                    if samples:
+                        print(f"  {col}: {samples}")
+            print("=== END DIAGNOSTICS ===")
+            raise ValueError(
+                "No matching parcel IDs found. Both Excel and shapefile IDs were "
+                "normalized to state parcel format (digits only) but no overlap was found."
+            )
         
-        # Join
+        # --- JOIN ---
         print("Joining data...")
-        joined = gdf.merge(df, left_on="PARCELID_JOIN", right_on="PARCELID_JOIN", how="inner")
+        joined = gdf.merge(df, on="STATE_PARCEL_JOIN", how="inner")
         
         if joined.empty:
-            raise ValueError("Join produced zero records. Check PARCELID fields.")
+            raise ValueError("Join produced zero records.")
         
         print(f"Joined {len(joined)} parcels")
         
         # Store original geometry for boundaries
         joined["boundary_geom"] = joined.geometry
         
-        # Compute label point (representative point of polygon)
+        # Compute label points
         print("Computing label points...")
         joined["label_point"] = joined.geometry.representative_point()
         labels = gpd.GeoDataFrame(joined, geometry="label_point", crs=gdf.crs)
         
-        # Reproject to target CRS
+        # Reproject
         print(f"Reprojecting to EPSG:{self.crs_id}...")
         target_crs = CRS.from_epsg(self.crs_id)
         labels = labels.to_crs(target_crs)
-        
-        # Also reproject the boundary geometry
         labels["boundary_geom"] = labels["boundary_geom"].to_crs(target_crs)
         
-        # Get X, Y coordinates
         labels["X"] = labels.geometry.x
         labels["Y"] = labels.geometry.y
         
-        # Build label text
+        # Build labels (uses state parcel number)
         print("Building labels...")
         labels["LABEL"] = labels.apply(build_label, axis=1)
         
-        # Debug: show some sample labels
+        # Debug: sample labels
         print("\nSample labels:")
         for i in range(min(3, len(labels))):
             print(f"\n--- Label {i+1} ---")
             print(labels.iloc[i]["LABEL"])
         
-        # Export DXF
+        # --- EXPORT DXF ---
         dxf_path = os.path.join(self.output_dir, "labels.dxf")
         print("Creating DXF...")
         
-        doc = ezdxf.new(units=0)  # 0 = Unitless
+        doc = ezdxf.new(units=0)
         msp = doc.modelspace()
         
-        # Create layers
         if BOUNDARY_LAYER not in doc.layers:
             doc.layers.add(name=BOUNDARY_LAYER)
         if LABEL_LAYER not in doc.layers:
@@ -415,11 +307,9 @@ class LabelExporter:
         for idx, row in labels.iterrows():
             geom = row["boundary_geom"]
             if geom.geom_type == 'Polygon':
-                # Get exterior coordinates
                 coords = list(geom.exterior.coords)
                 msp.add_lwpolyline(coords, dxfattribs={"layer": BOUNDARY_LAYER, "closed": True})
             elif geom.geom_type == 'MultiPolygon':
-                # Handle multipolygons
                 for poly in geom.geoms:
                     coords = list(poly.exterior.coords)
                     msp.add_lwpolyline(coords, dxfattribs={"layer": BOUNDARY_LAYER, "closed": True})
@@ -433,7 +323,7 @@ class LabelExporter:
                     "layer": LABEL_LAYER,
                     "char_height": TEXT_HEIGHT,
                     "insert": (row["X"], row["Y"]),
-                    "attachment_point": 5,  # 5 = middle center
+                    "attachment_point": 5,  # middle center
                 }
             )
         
